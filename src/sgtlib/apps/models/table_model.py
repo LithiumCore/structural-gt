@@ -1,7 +1,6 @@
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 
 
-
 # Define a simple table model
 class TableModel(QAbstractTableModel):
     SelectedRole = Qt.ItemDataRole.UserRole + 20
@@ -22,7 +21,11 @@ class TableModel(QAbstractTableModel):
         if not index.isValid() or not (0 <= index.row() < self.rowCount()):
             return None
 
-        available_roles = {Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.DecorationRole, self.SelectedRole}
+        available_roles = {
+            Qt.ItemDataRole.DisplayRole,
+            Qt.ItemDataRole.DecorationRole,
+            self.SelectedRole,
+        }
         if role not in available_roles:
             return None
 
@@ -42,8 +45,14 @@ class TableModel(QAbstractTableModel):
             old_index = self.selected_index
             self.selected_index = row
             if old_index != -1:
-                self.dataChanged.emit(self.index(old_index, 0), self.index(old_index, 0), [self.SelectedRole])
-            self.dataChanged.emit(self.index(row, 0), self.index(row, 0), [self.SelectedRole])
+                self.dataChanged.emit(
+                    self.index(old_index, 0),
+                    self.index(old_index, 0),
+                    [self.SelectedRole],
+                )
+            self.dataChanged.emit(
+                self.index(row, 0), self.index(row, 0), [self.SelectedRole]
+            )
 
     def reset_data(self, item_data):
         self.beginResetModel()
@@ -61,7 +70,9 @@ class TableModel(QAbstractTableModel):
             self.imageCache = {}
             self.endResetModel()
             # Emit dataChanged signal to notify QML
-            self.dataChanged.emit(self.index(0, 0), self.index(len(self.itemData) - 1, 0))
+            self.dataChanged.emit(
+                self.index(0, 0), self.index(len(self.itemData) - 1, 0)
+            )
             return
 
         start_row = len(self.itemData)
@@ -69,7 +80,9 @@ class TableModel(QAbstractTableModel):
         self.imageCache = img_cache
         self.endResetModel()
         # Emit dataChanged signal to notify QML
-        self.dataChanged.emit(self.index(start_row, 0), self.index(len(self.itemData) - 1, 0))
+        self.dataChanged.emit(
+            self.index(start_row, 0), self.index(len(self.itemData) - 1, 0)
+        )
 
     def roleNames(self):
         return {
@@ -79,6 +92,9 @@ class TableModel(QAbstractTableModel):
         }
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
-         if role == Qt.ItemDataRole.DisplayRole and orientation == Qt.Orientation.Horizontal:
+        if (
+            role == Qt.ItemDataRole.DisplayRole
+            and orientation == Qt.Orientation.Horizontal
+        ):
             return f"Column {section + 1}"
-         return super().headerData(section, orientation, role)
+        return super().headerData(section, orientation, role)

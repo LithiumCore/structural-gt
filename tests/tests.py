@@ -1,16 +1,18 @@
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
+
 # from sgtlib import modules as sgt
 from src.sgtlib import modules as sgt
 
 # set paths
 img_path = "../datasets/InVitroBioFilm.png"
-cfg_file = ""   # Optional: leave blank
+cfg_file = ""  # Optional: leave blank
+
 
 # Define a function for receiving progress updates
 def print_updates(progress_obj: sgt.ProgressData):
     print(f"{progress_obj.percent}: {progress_obj.message}")
+
 
 # Create a Network object
 ntwk_obj, _ = sgt.ImageProcessor.from_image_file(img_path, config_file=cfg_file)
@@ -21,27 +23,29 @@ ntwk_obj.apply_img_filters()
 ntwk_obj.remove_listener(print_updates)
 
 # evaluate image
-#hist = ntwk_obj.image_obj.compute_masked_binary_histogram()
-#print(f"\nActual Hist:\n{hist.astype(int).flatten()}\n")
+# hist = ntwk_obj.image_obj.compute_masked_binary_histogram()
+# print(f"\nActual Hist:\n{hist.astype(int).flatten()}\n")
 
 # View images
 orig_image = ntwk_obj.image_2d
 bin_image = ntwk_obj.binary_image_2d
-#grayscale_image = ntwk_obj.processed_image_3d[0]
+# grayscale_image = ntwk_obj.processed_image_3d[0]
 grayscale_image = ntwk_obj.grayscale_image_2d
 plt.imshow(cv2.cvtColor(bin_image, cv2.COLOR_BGR2RGB))
-plt.axis('off')  # Optional: Turn off axis ticks and labels for a cleaner image display
-plt.title('Binary Image')
+plt.axis("off")  # Optional: Turn off axis ticks and labels for a cleaner image display
+plt.title("Binary Image")
 plt.show()
 
-print(f"Original Image Shape: {orig_image.shape}\nBinary Image Shape: {bin_image.size}\nGrayscale Image Shape: {grayscale_image.shape}")
-#print(f"Original Image: {orig_image}\n")
-#print(f"Binary Image: {bin_image}\n")
-#print(f"Grayscale Image:{grayscale_image}\n")
+print(
+    f"Original Image Shape: {orig_image.shape}\nBinary Image Shape: {bin_image.size}\nGrayscale Image Shape: {grayscale_image.shape}"
+)
+# print(f"Original Image: {orig_image}\n")
+# print(f"Binary Image: {bin_image}\n")
+# print(f"Grayscale Image:{grayscale_image}\n")
 
-plt.imshow(grayscale_image, cmap='gray')
-plt.axis('off')  # Optional: Turn off axis ticks and labels for a cleaner image display
-plt.title('Grayscale Image')
+plt.imshow(grayscale_image, cmap="gray")
+plt.axis("off")  # Optional: Turn off axis ticks and labels for a cleaner image display
+plt.title("Grayscale Image")
 plt.show()
 
 # Extract graph
@@ -52,14 +56,14 @@ ntwk_obj.remove_listener(print_updates)
 # View graph
 net_image = ntwk_obj.graph_obj.img_ntwk
 plt.imshow(net_image)
-plt.axis('off')  # Optional: Turn off axis ticks and labels for a cleaner image display
-plt.title('Graph Image')
+plt.axis("off")  # Optional: Turn off axis ticks and labels for a cleaner image display
+plt.title("Graph Image")
 plt.show()
 
 # Compute graph theory metrics
 compute_obj = sgt.GraphAnalyzer(ntwk_obj)
 sgt.GraphAnalyzer.safe_run_analyzer(compute_obj, print_updates)
-#print(compute_obj.results_df)
+# print(compute_obj.results_df)
 
 # Save in PDF
 sgt.GraphAnalyzer.write_to_pdf(compute_obj)

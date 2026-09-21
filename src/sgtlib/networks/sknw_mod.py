@@ -10,10 +10,9 @@ Original source: https://github.com/Image-Py/sknw.git
 
 """
 
-
-import numpy as np
 # from numba import jit
 import networkx as nx
+import numpy as np
 
 
 def neighbors(shape):
@@ -31,10 +30,12 @@ def neighbors(shape):
 def mark(img, nbs):  # mark the array use (0, 1, 2)
     img = img.ravel()
     for p in range(len(img)):
-        if img[p] == 0: continue
+        if img[p] == 0:
+            continue
         s = 0
         for dp in nbs:
-            if img[p + dp] != 0: s += 1
+            if img[p + dp] != 0:
+                s += 1
         if s == 2:
             img[p] = 1
         else:
@@ -116,7 +117,7 @@ def trace(img, p, nbs, acc):
         if c2 != 0:
             break
 
-    return c1 - 10, c2 - 10, idx2rc(buf[:cur + 1], acc)
+    return c1 - 10, c2 - 10, idx2rc(buf[: cur + 1], acc)
 
 
 # @jit(nopython=True)  # parse the image, then get the nodes and edges
@@ -128,19 +129,23 @@ def parse_struc(img, nbs, acc, iso, ring):
     for p in range(len(img)):
         if img[p] == 2:
             isiso, nds = fill(img, p, num, nbs, acc)
-            if isiso and not iso: continue
+            if isiso and not iso:
+                continue
             num += 1
             nodes.append(nds)
     edges = []
     for p in range(len(img)):
-        if img[p] < 10: continue
+        if img[p] < 10:
+            continue
         for dp in nbs:
             if img[p + dp] == 1:
                 edge = trace(img, p + dp, nbs, acc)
                 edges.append(edge)
-    if not ring: return nodes, edges
+    if not ring:
+        return nodes, edges
     for p in range(len(img)):
-        if img[p] != 1: continue
+        if img[p] != 1:
+            continue
         img[p] = num
         num += 1
         nodes.append(idx2rc([p], acc))
@@ -154,19 +159,21 @@ def parse_struc(img, nbs, acc, iso, ring):
 # use nodes and edges to build a networkx graph
 def build_graph(nodes, edges, multi=False, full=True):
     os = np.array([i.mean(axis=0) for i in nodes])
-    if full: os = os.round().astype(np.uint16)
+    if full:
+        os = os.round().astype(np.uint16)
     graph = nx.MultiGraph() if multi else nx.Graph()
     for i in range(len(nodes)):
         graph.add_node(i, pts=nodes[i], o=os[i])
     for s, e, pts in edges:
-        if full: pts[[0, -1]] = os[[s, e]]
+        if full:
+            pts[[0, -1]] = os[[s, e]]
         l = np.linalg.norm(pts[1:] - pts[:-1], axis=1).sum()
         graph.add_edge(s, e, pts=pts, weight=l)
     return graph
 
 
 def mark_node(ske):
-    buf = np.pad(ske, (1, 1), mode='constant').astype(np.uint16)
+    buf = np.pad(ske, (1, 1), mode="constant").astype(np.uint16)
     nbs = neighbors(buf.shape)
     # acc = np.cumprod((1,) + buf.shape[::-1][:-1])[::-1]
     mark(buf, nbs)
@@ -174,7 +181,7 @@ def mark_node(ske):
 
 
 def build_sknw(ske, multi=False, iso=True, ring=True, full=True):
-    buf = np.pad(ske, (1, 1), mode='constant').astype(np.uint16)
+    buf = np.pad(ske, (1, 1), mode="constant").astype(np.uint16)
     nbs = neighbors(buf.shape)
     acc = np.cumprod((1,) + buf.shape[::-1][:-1])[::-1]
     mark(buf, nbs)
@@ -186,14 +193,14 @@ def build_sknw(ske, multi=False, iso=True, ring=True, full=True):
 def draw_graph(img, graph, cn=255, ce=128):
     acc = np.cumprod((1,) + img.shape[::-1][:-1])[::-1]
     img = img.ravel()
-    for (s, e) in graph.edges():
+    for s, e in graph.edges():
         eds = graph[s][e]
         if isinstance(graph, nx.MultiGraph):
             for i in eds:
-                pts = eds[i]['pts']
+                pts = eds[i]["pts"]
                 img[np.dot(pts, acc)] = ce
         else:
-            img[np.dot(eds['pts'], acc)] = ce
+            img[np.dot(eds["pts"], acc)] = ce
     for idx in graph.nodes():
-        pts = graph.nodes[idx]['pts']
+        pts = graph.nodes[idx]["pts"]
         img[np.dot(pts, acc)] = cn

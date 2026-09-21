@@ -119,13 +119,13 @@ sel_img_batch = ntwk_obj.selected_batch
 bin_images = [obj.img_bin for obj in sel_img_batch.images]
 grayscale_images = [obj.img_grayscale for obj in sel_img_batch.images]
 plt.imshow(bin_images[0])
-plt.axis('off')  # Optional: Turn off axis ticks and labels for a cleaner image display
-plt.title('Binary Image')
+plt.axis("off")  # Optional: Turn off axis ticks and labels for a cleaner image display
+plt.title("Binary Image")
 plt.show()
 
 plt.imshow(grayscale_images[0])
-plt.axis('off')  # Optional: Turn off axis ticks and labels for a cleaner image display
-plt.title('Grayscale Image')
+plt.axis("off")  # Optional: Turn off axis ticks and labels for a cleaner image display
+plt.title("Grayscale Image")
 plt.show()
 
 # Extract graph
@@ -136,8 +136,8 @@ ntwk_obj.remove_listener(print_updates)
 # View graph
 net_images = [ntwk_obj.graph_obj.img_ntwk]
 plt.imshow(net_images[0])
-plt.axis('off')  # Optional: Turn off axis ticks and labels for a cleaner image display
-plt.title('Graph Image')
+plt.axis("off")  # Optional: Turn off axis ticks and labels for a cleaner image display
+plt.title("Graph Image")
 plt.show()
 
 # Compute graph theory metrics

@@ -3,21 +3,20 @@
 Pyside6 controller class for AI search GUI components.
 """
 
-
 import logging
-from PySide6.QtCore import Signal, Slot, QObject, Property
 
-from ..models.checkbox_model import CheckBoxModel
+from PySide6.QtCore import Property, QObject, Signal, Slot
+
 from ...compute.graph_analyzer import GraphAnalyzer
+from ..models.checkbox_model import CheckBoxModel
 
 
 class AIController(QObject):
-
     _aiBusyChanged = Signal()
     _aiModeChanged = Signal()
     updateAIProgressSignal = Signal(int, str)
 
-    def __init__(self, controller_obj, parent: QObject|None = None):
+    def __init__(self, controller_obj, parent: QObject | None = None):
         super().__init__(parent)
         self._ctrl = controller_obj
         # self._ai_mode_active = False
@@ -41,7 +40,11 @@ class AIController(QObject):
             return False
         if sgt_obj.ntwk_p is None:
             return False
-        return sgt_obj.ntwk_p.ai_mode_active if sgt_obj.ntwk_p.ai_mode_active is not None else False
+        return (
+            sgt_obj.ntwk_p.ai_mode_active
+            if sgt_obj.ntwk_p.ai_mode_active is not None
+            else False
+        )
 
     def start_task(self):
         """Activate the AI running (or busy) flag."""
@@ -55,9 +58,9 @@ class AIController(QObject):
 
     def synchronize_ai_models(self, sgt_obj: GraphAnalyzer):
         """
-            Reload image configuration selections and controls from saved dict to QML gui_mcw after the image is loaded.
+        Reload image configuration selections and controls from saved dict to QML gui_mcw after the image is loaded.
 
-            :param sgt_obj: A GraphAnalyzer object with all saved user-selected configurations.
+        :param sgt_obj: A GraphAnalyzer object with all saved user-selected configurations.
         """
         if sgt_obj is None:
             return
@@ -68,13 +71,18 @@ class AIController(QObject):
             options_ai = ntwk_p.configs
 
             # Get data from object configs
-            ai_search_params = [v for v in options_ai.values() if v["type"] == "search-params"]
+            ai_search_params = [
+                v for v in options_ai.values() if v["type"] == "search-params"
+            ]
 
             # Update QML adapter-models with fetched data
             self.aiSearchModel.reset_data(ai_search_params)
         except Exception as err:
-            logging.exception("Fatal Error: %s", err, extra={'user': 'SGT Logs'})
-            self._ctrl.showAlertSignal.emit("Fatal Error", "Error re-loading AI configurations! Close app and try again.")
+            logging.exception("Fatal Error: %s", err, extra={"user": "SGT Logs"})
+            self._ctrl.showAlertSignal.emit(
+                "Fatal Error",
+                "Error re-loading AI configurations! Close app and try again.",
+            )
 
     @Slot(bool)
     def toggle_ai_mode(self, activate):
@@ -101,14 +109,19 @@ class AIController(QObject):
         if (sgt_obj.ntwk_p is None) or (not sgt_obj.ntwk_p.ai_mode_active):
             return
 
-        if sgt_obj.ntwk_p .filter_space is not None:
-            if sgt_obj.ntwk_p .filter_space.best_candidate.position not in sgt_obj.ntwk_p .filter_space.ignore_candidates:
+        if sgt_obj.ntwk_p.filter_space is not None:
+            if (
+                sgt_obj.ntwk_p.filter_space.best_candidate.position
+                not in sgt_obj.ntwk_p.filter_space.ignore_candidates
+            ):
                 # Filters already selected and values estimated
                 return
 
         if self._wait_flag_ai:
-            logging.info("Another AI task is running!", extra={'user': 'SGT Logs'})
-            self._ctrl.showAlertSignal.emit("Please Wait", "Another AI task is running!")
+            logging.info("Another AI task is running!", extra={"user": "SGT Logs"})
+            self._ctrl.showAlertSignal.emit(
+                "Please Wait", "Another AI task is running!"
+            )
             return
 
         try:
@@ -117,7 +130,7 @@ class AIController(QObject):
             self._ctrl.submit_job(2, "Metaheuristic-Search", (sgt_obj.ntwk_p,), True)
         except Exception as err:
             self.stop_task()
-            logging.info("AI Mode Error: %s", err, extra={'user': 'SGT Logs'})
+            logging.info("AI Mode Error: %s", err, extra={"user": "SGT Logs"})
 
     @Slot()
     def reset_ai_filter_results(self):
@@ -125,5 +138,3 @@ class AIController(QObject):
         sgt_obj = self._ctrl.get_selected_sgt_obj()
         sgt_obj.ntwk_p.reset_metaheuristic_search()
         self.run_ai_filter_search()
-
-

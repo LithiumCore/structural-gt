@@ -3,7 +3,7 @@
 Checks OS-level theme
 """
 
-from PySide6.QtCore import QObject, Property, Signal, Slot
+from PySide6.QtCore import Property, QObject, Signal, Slot
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QApplication
 

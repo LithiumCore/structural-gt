@@ -4,8 +4,11 @@
 """
 
 from sgtlib.modules import ExpressGT
+
 # The 4 SEM images are stores in the folder '../data/'
 # The StructuralGT configuration file is stored in '../data/sgt_configs.ini'. This file has all the selected image filters and graph computation parameters. DO NOT MODIFY ANYTHING IN THIS FILE.
 # The StructuralGT results will be stored in the folder '../results/'
-sgt = ExpressGT(image_dir="../data", output_dir="../results", config_file="../data/sgt_configs.ini")
+sgt = ExpressGT(
+    image_dir="../data", output_dir="../results", config_file="../data/sgt_configs.ini"
+)
 sgt.compute_gt_descriptors()

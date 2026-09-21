@@ -4,32 +4,52 @@
 Processes 2D or 3D images and generate a fiber graph network.
 """
 
-import re
-import os
-import cv2
 import copy
+
 # import pydicom
 import logging
-import numpy as np
-# import nibabel as nib
-from PIL import Image
-# from cv2.typing import MatLike
-from dataclasses import dataclass
+import os
+import re
 from collections import defaultdict
 
+# from cv2.typing import MatLike
+from dataclasses import dataclass
+
+import cv2
+import numpy as np
+
+# import nibabel as nib
+from PIL import Image
+
 from ..imaging.base_image import BaseImage
-from ..search.filter_env import FilterSearchSpace
 from ..networks.fiber_network import FiberNetworkBuilder
+from ..search.filter_env import (
+    FilterSearchSpace,
+    sgt_genetic_algorithm,
+    sgt_hill_climbing_algorithm,
+)
 from ..utils.config_loader import load_ai_configs
-from ..utils.sgt_utils import plot_to_opencv, AbortException, ProgressUpdate, ProgressData
-from ..search.filter_env import sgt_genetic_algorithm, sgt_hill_climbing_algorithm
+from ..utils.sgt_utils import (
+    AbortException,
+    ProgressData,
+    ProgressUpdate,
+    plot_to_opencv,
+)
 
 logger = logging.getLogger("SGT App")
 
 Image.MAX_IMAGE_PIXELS = None  # Disable limit on maximum image size
-ALLOWED_IMG_EXTENSIONS = ('*.jpg', '*.png', '*.jpeg', '*.bmp', '*.tif', '*.tiff', '*.qptiff')
-ALLOWED_3D_IMG_EXTENSIONS = ('*.qptiff', '*.nii', '*.nii.gz', '*.dcm')
-ALLOWED_GRAPH_FILE_EXTENSIONS = ('*.csv', '*.gsd')
+ALLOWED_IMG_EXTENSIONS = (
+    "*.jpg",
+    "*.png",
+    "*.jpeg",
+    "*.bmp",
+    "*.tif",
+    "*.tiff",
+    "*.qptiff",
+)
+ALLOWED_3D_IMG_EXTENSIONS = ("*.qptiff", "*.nii", "*.nii.gz", "*.dcm")
+ALLOWED_GRAPH_FILE_EXTENSIONS = ("*.csv", "*.gsd")
 
 
 class ImageProcessor(ProgressUpdate):
@@ -44,6 +64,7 @@ class ImageProcessor(ProgressUpdate):
     @dataclass
     class ImageBatch:
         """A class for storing image batch data."""
+
         numpy_image: np.ndarray
         images: list[BaseImage]
         graph_obj: FiberNetworkBuilder
@@ -76,7 +97,7 @@ class ImageProcessor(ProgressUpdate):
         >>> ntwk_p, img_file = ImageProcessor.from_image_file(i_path, config_file=cfg_path)
         >>> ntwk_p.apply_img_filters()
         """
-        super(ImageProcessor, self).__init__()
+        super().__init__()
         self._configs = load_ai_configs(cfg_file)
         self._img_path: str = img_path if isinstance(img_path, str) else img_path[0]
         self._output_dir: str = out_dir
@@ -85,7 +106,7 @@ class ImageProcessor(ProgressUpdate):
         self._auto_scale: bool = auto_scale
         self._image_batches: list[ImageProcessor.ImageBatch] = []
         self._selected_batch_index: int = 0
-        self._filter_space: FilterSearchSpace.SearchSpace|None = None
+        self._filter_space: FilterSearchSpace.SearchSpace | None = None
         # self._initialize_image_batches(self._load_img_from_file(img_path))
 
     @property
@@ -133,7 +154,7 @@ class ImageProcessor(ProgressUpdate):
         self._auto_scale = value
 
     @property
-    def image_batches(self) -> list["ImageProcessor.ImageBatch"]:
+    def image_batches(self) -> list[ImageProcessor.ImageBatch]:
         """Returns a list of ImageBatch objects."""
         return self._image_batches
 
@@ -143,7 +164,7 @@ class ImageProcessor(ProgressUpdate):
         return self._selected_batch_index
 
     @property
-    def filter_space(self) -> FilterSearchSpace.SearchSpace|None:
+    def filter_space(self) -> FilterSearchSpace.SearchSpace | None:
         """Returns the filter space."""
         return self._filter_space
 
@@ -176,14 +197,18 @@ class ImageProcessor(ProgressUpdate):
         sel_img_batch = self.selected_batch
         if sel_img_batch.is_graph_only:
             return []
-        sel_images: list[BaseImage] = [sel_img_batch.images[i] for i in sel_img_batch.selected_images_positions]
+        sel_images: list[BaseImage] = [
+            sel_img_batch.images[i] for i in sel_img_batch.selected_images_positions
+        ]
         return sel_images
 
     @property
     def image_obj(self) -> BaseImage:
         """Returns the first image (2D) object/instance in the batch."""
         sel_img_batch = self.selected_batch
-        first_index: int = next(iter(sel_img_batch.selected_images_positions), 0)  # 1st selected image
+        first_index: int = next(
+            iter(sel_img_batch.selected_images_positions), 0
+        )  # 1st selected image
         return sel_img_batch.images[first_index]
 
     @property
@@ -197,41 +222,41 @@ class ImageProcessor(ProgressUpdate):
         return self.selected_batch.graph_obj
 
     @property
-    def image_2d(self) -> np.ndarray|None:
+    def image_2d(self) -> np.ndarray | None:
         """Returns OpenCV 2D version of the image (first slice/frame/image in the batch)."""
         return self.image_obj.img_2d
 
     @property
-    def image_3d(self) -> list[np.ndarray|None]:
+    def image_3d(self) -> list[np.ndarray | None]:
         """Returns the 3D version of the image as a list of OpenCV arrays."""
         images = [obj.img_2d for obj in self.image_obj_3d]
         return images
 
     @property
-    def binary_image_2d(self) -> np.ndarray|None:
+    def binary_image_2d(self) -> np.ndarray | None:
         """Returns OpenCV version of the binary image (first slice/frame/image in the batch)."""
         # img_bin_rgb = cv2.cvtColor(self.image_obj.img_bin, cv2.COLOR_BGR2RGB)
         return self.image_obj.img_bin
 
     @property
-    def binary_image_3d(self) -> list[np.ndarray|None]:
+    def binary_image_3d(self) -> list[np.ndarray | None]:
         """Returns the 3D version of the binary image as a list of OpenCV arrays."""
         bin_images = [obj.img_bin for obj in self.image_obj_3d]
         return bin_images
 
     @property
-    def grayscale_image_2d(self) -> np.ndarray|None:
+    def grayscale_image_2d(self) -> np.ndarray | None:
         """Returns OpenCV version of the modified image (first slice/frame/image in the batch)."""
         return self.image_obj.img_grayscale
 
     @property
-    def grayscale_image_3d(self) -> list[np.ndarray|None]:
+    def grayscale_image_3d(self) -> list[np.ndarray | None]:
         """Returns the 3D version of the modified image as a list of OpenCV arrays."""
         grayscale_images = [obj.img_grayscale for obj in self.image_obj_3d]
         return grayscale_images
 
     @property
-    def mutated_image_3d(self) -> list[np.ndarray|None]:
+    def mutated_image_3d(self) -> list[np.ndarray | None]:
         """Returns the 3D version of the mutated image as a list of OpenCV arrays."""
         mut_images = [obj.img_mut for obj in self.image_obj_3d]
         return mut_images
@@ -266,9 +291,13 @@ class ImageProcessor(ProgressUpdate):
         """
 
         # First file if it's a list
-        ext = os.path.splitext(file[0])[1].lower() if isinstance(file, list) else os.path.splitext(file)[1].lower()
+        ext = (
+            os.path.splitext(file[0])[1].lower()
+            if isinstance(file, list)
+            else os.path.splitext(file)[1].lower()
+        )
         try:
-            if ext in ['.png', '.jpg', '.jpeg', '.bmp']:
+            if ext in [".png", ".jpg", ".jpeg", ".bmp"]:
                 image_groups = defaultdict(list)
                 if isinstance(file, list):
                     for img_file in file:
@@ -286,10 +315,11 @@ class ImageProcessor(ProgressUpdate):
                     # Cluster the images into batches based on (h, w) size
                     h, w = image_rgb.shape[:2]
                     image_groups[(h, w)].append(image_rgb)
-                img_batch_groups = ImageProcessor.create_img_batch_groups(image_groups, self._config_file,
-                                                                          self._auto_scale)
+                img_batch_groups = ImageProcessor.create_img_batch_groups(
+                    image_groups, self._config_file, self._auto_scale
+                )
                 return img_batch_groups
-            elif ext in ['.tif', '.tiff', '.qptiff']:
+            elif ext in [".tif", ".tiff", ".qptiff"]:
                 image_groups = defaultdict(list)
                 if isinstance(file, list):
                     for img_file in file:
@@ -303,7 +333,9 @@ class ImageProcessor(ProgressUpdate):
                     img = Image.open(file)
                     while True:
                         # Create clusters/groups of similar size images
-                        frame = np.array(img)  # Convert the current frame to the numpy array
+                        frame = np.array(
+                            img
+                        )  # Convert the current frame to the numpy array
                         # Cluster the images into batches based on (h, w) size
                         h, w = frame.shape[:2]
                         image_groups[(h, w)].append(frame)
@@ -313,10 +345,11 @@ class ImageProcessor(ProgressUpdate):
                         except EOFError:
                             # Stop when all frames are read
                             break
-                img_batch_groups = ImageProcessor.create_img_batch_groups(image_groups, self._config_file,
-                                                                          self._auto_scale)
+                img_batch_groups = ImageProcessor.create_img_batch_groups(
+                    image_groups, self._config_file, self._auto_scale
+                )
                 return img_batch_groups
-            elif ext in ['.nii', '.nii.gz']:
+            elif ext in [".nii", ".nii.gz"]:
                 """# Load NIfTI image using nibabel
                 img_nib = nib.load(file)
                 data = img_nib.get_fdata()
@@ -324,7 +357,7 @@ class ImageProcessor(ProgressUpdate):
                 data = cv2.normalize(data, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
                 return data"""
                 return []
-            elif ext == '.dcm':
+            elif ext == ".dcm":
                 """# Load DICOM image using pydicom
                 dcm = pydicom.dcmread(file)
                 data = dcm.pixel_array
@@ -335,11 +368,11 @@ class ImageProcessor(ProgressUpdate):
             else:
                 raise ValueError(f"Unsupported file format: {ext}")
         except Exception as err:
-            logging.exception(f"Error loading {file}:", err, extra={'user': 'SGT Logs'})
+            logging.exception(f"Error loading {file}:", err, extra={"user": "SGT Logs"})
             # self.update_status(ProgressData(sender="GT", type="error", message=f"Failed to load {file}: {err}"))
             return None
 
-    def _initialize_image_batches(self, img_batches: list[ImageBatch]|None):
+    def _initialize_image_batches(self, img_batches: list[ImageBatch] | None):
         """
         Retrieve all image slices of the selected image batch. If the image is 2D, only one slice exists
         if it is 3D, then multiple slices exist.
@@ -364,23 +397,29 @@ class ImageProcessor(ProgressUpdate):
             image_list: list[BaseImage] = []
             if (len(img_data.shape) >= 3) and (fmt_2d is None):
                 # If the image has shape (d, h, w) and does not an alpha channel, which is less than 4 - (h, w, a)
-                image_list = [BaseImage(img, self._config_file, scale_factor) for img in img_data]
+                image_list = [
+                    BaseImage(img, self._config_file, scale_factor) for img in img_data
+                ]
             else:
                 img_obj = BaseImage(img_data, self._config_file, scale_factor)
                 image_list.append(img_obj)
 
             is_2d = True
             if len(image_list) == 1:
-                img_shape = img_t.shape if (img_t := image_list[0].img_2d) is not None else []
+                img_shape = (
+                    img_t.shape if (img_t := image_list[0].img_2d) is not None else []
+                )
                 if len(img_shape) == 3 and image_list[0].has_alpha_channel:
-                    logging.info("Image is 2D with Alpha Channel.", extra={'user': 'SGT Logs'})
+                    logging.info(
+                        "Image is 2D with Alpha Channel.", extra={"user": "SGT Logs"}
+                    )
                     # self.update_status(ProgressData(sender="GT", type="warning", message=f"Image is 2D with Alpha Channel"))
                 else:
-                    logging.info("Image is 2D.", extra={'user': 'SGT Logs'})
+                    logging.info("Image is 2D.", extra={"user": "SGT Logs"})
                     # self.update_status(ProgressData(sender="GT", type="warning", message=f"Image is 2D"))
             elif len(image_list) > 1:
                 is_2d = False
-                logging.info("Image is 3D.", extra={'user': 'SGT Logs'})
+                logging.info("Image is 3D.", extra={"user": "SGT Logs"})
                 # self.update_status(ProgressData(sender="GT", type="warning", message=f"Image is 3D"))
 
             img_batch.images = image_list
@@ -388,7 +427,9 @@ class ImageProcessor(ProgressUpdate):
             self.update_image_props(img_batch)
         self._image_batches = img_batches
 
-    def select_image_batch(self, sel_batch_idx: int, selected_images: set|None = None):
+    def select_image_batch(
+        self, sel_batch_idx: int, selected_images: set | None = None
+    ):
         """
         Update the selected image batch and the selected image slices.
 
@@ -402,7 +443,8 @@ class ImageProcessor(ProgressUpdate):
 
         if sel_batch_idx >= len(self._image_batches):
             raise ValueError(
-                f"Selected image batch {sel_batch_idx} out of range! Select in range 0-{len(self._image_batches)}")
+                f"Selected image batch {sel_batch_idx} out of range! Select in range 0-{len(self._image_batches)}"
+            )
 
         self._selected_batch_index = sel_batch_idx
         self.update_image_props(self._image_batches[sel_batch_idx])
@@ -412,7 +454,9 @@ class ImageProcessor(ProgressUpdate):
             return
 
         if isinstance(selected_images, set):
-            self._image_batches[sel_batch_idx].selected_images_positions = selected_images
+            self._image_batches[
+                sel_batch_idx
+            ].selected_images_positions = selected_images
 
     def track_progress(self, status_data: ProgressData):
         self.update_status(status_data)
@@ -432,7 +476,9 @@ class ImageProcessor(ProgressUpdate):
         if sel_batch.is_graph_only:
             return
 
-        self.update_status(ProgressData(percent=10, sender="GT", message=f"Processing image..."))
+        self.update_status(
+            ProgressData(percent=10, sender="GT", message="Processing image...")
+        )
         if filter_type == 2:
             self.reset_img_filters()
 
@@ -446,16 +492,28 @@ class ImageProcessor(ProgressUpdate):
 
             if progress < 100:
                 progress += incr
-                self.update_status(ProgressData(percent=int(progress), sender="GT", message=f"Image processing in progress..."))
+                self.update_status(
+                    ProgressData(
+                        percent=int(progress),
+                        sender="GT",
+                        message="Image processing in progress...",
+                    )
+                )
 
             img_data = img.copy() if (img := img_obj.img_mut) is not None else None
             img_obj.img_grayscale = img_obj.process_img(image=img_data)
 
             if filter_type == 2:
-                img_gray = img.copy() if (img := img_obj.img_grayscale) is not None else None
+                img_gray = (
+                    img.copy() if (img := img_obj.img_grayscale) is not None else None
+                )
                 img_obj.img_bin = img_obj.binarize_img(img_gray)
             img_obj.get_pixel_width()
-        self.update_status(ProgressData(percent=100, sender="GT", message=f"Image processing complete..."))
+        self.update_status(
+            ProgressData(
+                percent=100, sender="GT", message="Image processing complete..."
+            )
+        )
 
     def undo_img_changes(self, img_pos: int = -1):
         """
@@ -473,7 +531,7 @@ class ImageProcessor(ProgressUpdate):
                     sel_batch.images[i].init_image()
             self.update_image_props(sel_batch)
         except Exception as err:
-            logging.exception(f"Undo Error: {err}", extra={'user': 'GT'})
+            logging.exception(f"Undo Error: {err}", extra={"user": "GT"})
             return
 
     def eliminate_selected_img_colors(self, img_pos: int, swap_color: int):
@@ -493,22 +551,37 @@ class ImageProcessor(ProgressUpdate):
         if sel_batch.is_graph_only:
             return
 
-        self.update_status(ProgressData(percent=10, sender="GT", message=f"Eliminating colors..."))
+        self.update_status(
+            ProgressData(percent=10, sender="GT", message="Eliminating colors...")
+        )
         img_obj = sel_batch.images[img_pos]
         if len(img_obj.dominant_colors) == 0:
-            self.update_status(ProgressData(percent=100, sender="GT", message="No dominant colors found!"))
+            self.update_status(
+                ProgressData(
+                    percent=100, sender="GT", message="No dominant colors found!"
+                )
+            )
             return
 
         img = img_t.copy() if (img_t := img_obj.img_mut) is not None else None
-        swap_to_white = True if swap_color == 1 else False
+        swap_to_white = swap_color == 1
         for sel_color in img_obj.dominant_colors:
             if sel_color.is_selected:
                 hex_code = sel_color.hex_code
                 pixels = sel_color.pixel_positions
-                img = BaseImage.eliminate_img_colors(image=img, hex_color=hex_code, pixel_pos=pixels, is_white=swap_to_white)
+                img = BaseImage.eliminate_img_colors(
+                    image=img,
+                    hex_color=hex_code,
+                    pixel_pos=pixels,
+                    is_white=swap_to_white,
+                )
 
         img_obj.img_mut = img_t.copy() if (img_t := img) is not None else None
-        self.update_status(ProgressData(percent=100, sender="GT", message="Color elimination complete..."))
+        self.update_status(
+            ProgressData(
+                percent=100, sender="GT", message="Color elimination complete..."
+            )
+        )
 
     def reset_img_filters(self):
         """Delete existing filters that have been applied on the image."""
@@ -528,7 +601,9 @@ class ImageProcessor(ProgressUpdate):
         img_obj = self.image_obj
         filter_space = self._filter_space
         # sel_filter_candidate = self._filter_space.best_candidate
-        sel_filter_candidate = s_can.best_candidate if (s_can := self._filter_space) is not None else None
+        sel_filter_candidate = (
+            s_can.best_candidate if (s_can := self._filter_space) is not None else None
+        )
         if opt_model["find_filter_selections"]["value"] == 1:
             if sel_filter_candidate is not None:
                 filter_space.ignore_candidates.add(sel_filter_candidate.position)
@@ -552,7 +627,9 @@ class ImageProcessor(ProgressUpdate):
             # bright_space = sel_filter_candidate.brightness_space
             if bright_space is not None:
                 if bright_space.best_candidate is not None:
-                    bright_space.ignore_candidates.add(bright_space.best_candidate.position)
+                    bright_space.ignore_candidates.add(
+                        bright_space.best_candidate.position
+                    )
 
     def apply_img_scaling(self):
         """Re-scale (downsample or up-sample) a 2D image or 3D images to a specified size"""
@@ -565,7 +642,9 @@ class ImageProcessor(ProgressUpdate):
         scale_size = 0
         for scale_item in sel_batch.scaling_options:
             try:
-                scale_size = scale_item["dataValue"] if scale_item["value"] == 1 else scale_size
+                scale_size = (
+                    scale_item["dataValue"] if scale_item["value"] == 1 else scale_size
+                )
             except KeyError:
                 continue
 
@@ -574,9 +653,11 @@ class ImageProcessor(ProgressUpdate):
 
         img_px_size = 1
         for img_obj in sel_batch.images:
-            img_shape = img_t.copy() if (img_t := img_obj.img_raw) is not None else [1, 1]
+            img_shape = (
+                img_t.copy() if (img_t := img_obj.img_raw) is not None else [1, 1]
+            )
             temp_px = max(img_shape[0], img_shape[1])
-            img_px_size = temp_px if temp_px > img_px_size else img_px_size
+            img_px_size = max(img_px_size, temp_px)
         scale_factor = scale_size / img_px_size
 
         # Resize (Downsample) all frames to the smaller pixel size while maintaining the aspect ratio
@@ -592,7 +673,9 @@ class ImageProcessor(ProgressUpdate):
             img_obj.scale_factor = scale_factor
         self.update_image_props(sel_batch)
 
-    def crop_image(self, x: int, y: int, crop_w: int, crop_h: int, actual_w: int, actual_h: int):
+    def crop_image(
+        self, x: int, y: int, crop_w: int, crop_h: int, actual_w: int, actual_h: int
+    ):
         """
         A function that crops images into a new box dimension.
 
@@ -606,9 +689,11 @@ class ImageProcessor(ProgressUpdate):
         sel_batch = self.selected_batch
         if len(sel_batch.selected_images_positions) > 0:
             for i in sel_batch.selected_images_positions:
-                sel_batch.images[i].apply_img_crop(x, y, crop_w, crop_h, actual_w, actual_h)
+                sel_batch.images[i].apply_img_crop(
+                    x, y, crop_w, crop_h, actual_w, actual_h
+                )
         self.update_image_props(sel_batch)
-        self.selected_batch_view = 'grayscale'
+        self.selected_batch_view = "grayscale"
 
     def compute_img_histograms(self, img_pos: int) -> None | list:
         """
@@ -621,28 +706,56 @@ class ImageProcessor(ProgressUpdate):
         if sel_batch.is_graph_only:
             return None
 
-        self.update_status(ProgressData(percent=10, sender="GT", message="Starting histogram computation..."))
+        self.update_status(
+            ProgressData(
+                percent=10, sender="GT", message="Starting histogram computation..."
+            )
+        )
         lst_histograms = []
         # Get BaseImage object
         img_obj = sel_batch.images[img_pos]
 
         # Computations
-        self.update_status(ProgressData(percent=20, sender="GT", message="Computing histogram of original image..."))
+        self.update_status(
+            ProgressData(
+                percent=20,
+                sender="GT",
+                message="Computing histogram of original image...",
+            )
+        )
         img_hist = plot_to_opencv(img_obj.plot_img_histogram(curr_view="original"))
         img = img_t.copy() if (img_t := img_hist) is not None else None
         lst_histograms.append(img)
 
-        self.update_status(ProgressData(percent=40, sender="GT", message="Computing histogram of binary image..."))
+        self.update_status(
+            ProgressData(
+                percent=40,
+                sender="GT",
+                message="Computing histogram of binary image...",
+            )
+        )
         img_hist = plot_to_opencv(img_obj.plot_img_histogram(curr_view="binary"))
         img = img_t.copy() if (img_t := img_hist) is not None else None
         lst_histograms.append(img)
 
-        self.update_status(ProgressData(percent=50, sender="GT", message="Computing histogram of grayscale image..."))
+        self.update_status(
+            ProgressData(
+                percent=50,
+                sender="GT",
+                message="Computing histogram of grayscale image...",
+            )
+        )
         img_hist = plot_to_opencv(img_obj.plot_img_histogram(curr_view="grayscale"))
         img = img_t.copy() if (img_t := img_hist) is not None else None
         lst_histograms.append(img)
 
-        self.update_status(ProgressData(percent=80, sender="GT", message="Computing histogram of mutated image..."))
+        self.update_status(
+            ProgressData(
+                percent=80,
+                sender="GT",
+                message="Computing histogram of mutated image...",
+            )
+        )
         img_hist = plot_to_opencv(img_obj.plot_img_histogram(curr_view="mutated"))
         img = img_t.copy() if (img_t := img_hist) is not None else None
         lst_histograms.append(img)
@@ -662,19 +775,35 @@ class ImageProcessor(ProgressUpdate):
         if sel_batch.is_graph_only:
             return None
 
-        self.update_status(ProgressData(percent=10, sender="GT", message=f"Retrieving dominant colors..."))
+        self.update_status(
+            ProgressData(
+                percent=10, sender="GT", message="Retrieving dominant colors..."
+            )
+        )
         # Get BaseImage object
         img_obj = sel_batch.images[img_pos]
         if len(img_obj.dominant_colors) == top_k:
-            self.update_status(ProgressData(percent=100, sender="GT", message="Dominant already colors retrieved!"))
+            self.update_status(
+                ProgressData(
+                    percent=100,
+                    sender="GT",
+                    message="Dominant already colors retrieved!",
+                )
+            )
             return img_obj.dominant_colors
 
         top_colors = img_obj.get_dominant_img_colors(top_k=top_k)
         if top_colors is None:
-            self.update_status(ProgressData(percent=100, sender="GT", message="No dominant colors found!"))
+            self.update_status(
+                ProgressData(
+                    percent=100, sender="GT", message="No dominant colors found!"
+                )
+            )
             return None
 
-        self.update_status(ProgressData(percent=100, sender="GT", message="Dominant colors retrieved!"))
+        self.update_status(
+            ProgressData(percent=100, sender="GT", message="Dominant colors retrieved!")
+        )
         return top_colors
 
     def metaheuristic_image_configs(self) -> dict | None:
@@ -694,11 +823,23 @@ class ImageProcessor(ProgressUpdate):
                         search_space = sel_filter_candidate.brightness_space
                     else:
                         search_space = sel_filter_candidate.value_space
-                    new_img_configs = sgt_genetic_algorithm(search_space, img_2d, sel_img_configs, generations=max_iters, pop_size=ga_init_pop)
-                    sel_filter_candidate.cost = search_space.best_candidate.cost if search_space.best_candidate is not None else np.inf
+                    new_img_configs = sgt_genetic_algorithm(
+                        search_space,
+                        img_2d,
+                        sel_img_configs,
+                        generations=max_iters,
+                        pop_size=ga_init_pop,
+                    )
+                    sel_filter_candidate.cost = (
+                        search_space.best_candidate.cost
+                        if search_space.best_candidate is not None
+                        else np.inf
+                    )
                     sel_filter_candidate.img_configs = copy.deepcopy(new_img_configs)
 
-        self.update_status(ProgressData(percent=0, sender="AI", message=f"Starting filter search..."))
+        self.update_status(
+            ProgressData(percent=0, sender="AI", message="Starting filter search...")
+        )
         opt_model = self._configs
         img_configs = self.image_obj.configs
         img_2d = img_t.copy() if (img_t := self.image_obj.img_raw) is not None else None
@@ -706,45 +847,81 @@ class ImageProcessor(ProgressUpdate):
         ga_init_pop = opt_model["genetic_alg_initial_pop"]["value"]
 
         if self.abort:
-            self.update_status(ProgressData(type="error", sender="AI", message=f"Task stopped!"))
+            self.update_status(
+                ProgressData(type="error", sender="AI", message="Task stopped!")
+            )
             return None
 
         # 1. Create a search space
         if self._filter_space is None:
-            self.update_status(ProgressData(percent=20, sender="AI", message=f"Creating search environment..."))
-            self._filter_space = FilterSearchSpace.build_search_space(img_configs, initial_pop=ga_init_pop)
+            self.update_status(
+                ProgressData(
+                    percent=20, sender="AI", message="Creating search environment..."
+                )
+            )
+            self._filter_space = FilterSearchSpace.build_search_space(
+                img_configs, initial_pop=ga_init_pop
+            )
         filter_space = self._filter_space
 
         # 2. Run the Hill-climbing algorithm to find the best "image config combination"
         if opt_model["find_filter_selections"]["value"] == 1:
-            self.update_status(ProgressData(percent=50, sender="AI", message=f"Searching for filter selections..."))
+            self.update_status(
+                ProgressData(
+                    percent=50,
+                    sender="AI",
+                    message="Searching for filter selections...",
+                )
+            )
             try:
                 sgt_hill_climbing_algorithm(filter_space, img_2d, max_iters=max_iters)
             except AbortException as err:
                 self.abort = True
-                logging.exception(f"Error finding best apply selections:", err, extra={'user': 'SGT Logs'})
-                self.update_status(ProgressData(type="error", sender="AI", message=f"{err}"))
+                logging.exception(
+                    "Error finding best apply selections:",
+                    err,
+                    extra={"user": "SGT Logs"},
+                )
+                self.update_status(
+                    ProgressData(type="error", sender="AI", message=f"{err}")
+                )
                 return None
 
         # 3. Run the Genetic Algorithm to find the best "image filter values"
-        sel_filter_candidate = s_can.best_candidate if (s_can := filter_space) is not None else None
+        sel_filter_candidate = (
+            s_can.best_candidate if (s_can := filter_space) is not None else None
+        )
         if opt_model["find_filter_values"]["value"] == 1:
-            self.update_status(ProgressData(percent=65, sender="AI", message=f"Searching for filter values..."))
+            self.update_status(
+                ProgressData(
+                    percent=65, sender="AI", message="Searching for filter values..."
+                )
+            )
             try:
                 _run_genetic_algorithm("value-space")
             except AbortException as err:
                 self.abort = True
-                self.update_status(ProgressData(type="error", sender="AI", message=f"{err}"))
+                self.update_status(
+                    ProgressData(type="error", sender="AI", message=f"{err}")
+                )
                 return None
 
         # 4. Run the Genetic Algorithm to find the best "brightness/contrast values" (only if 'val_search_space' fxn fails)
         if opt_model["find_brightness_contrast"]["value"] == 1:
-            self.update_status(ProgressData(percent=80, sender="AI", message=f"Searching for brightness/contrast values..."))
+            self.update_status(
+                ProgressData(
+                    percent=80,
+                    sender="AI",
+                    message="Searching for brightness/contrast values...",
+                )
+            )
             try:
                 _run_genetic_algorithm("brightness-space")
             except AbortException as err:
                 self.abort = True
-                self.update_status(ProgressData(type="error", sender="AI", message=f"{err}"))
+                self.update_status(
+                    ProgressData(type="error", sender="AI", message=f"{err}")
+                )
                 return None
 
         candidate_cost = np.inf
@@ -752,7 +929,13 @@ class ImageProcessor(ProgressUpdate):
             candidate_cost = sel_filter_candidate.cost
         if candidate_cost == np.inf:
             self.abort = True
-            self.update_status(ProgressData(type="error", sender="AI", message=f"No valid image configurations found! Try again!"))
+            self.update_status(
+                ProgressData(
+                    type="error",
+                    sender="AI",
+                    message="No valid image configurations found! Try again!",
+                )
+            )
             return None
 
         if sel_filter_candidate is not None:
@@ -760,63 +943,107 @@ class ImageProcessor(ProgressUpdate):
                 return sel_filter_candidate.img_configs
         return None
 
-    def build_graph_network(self, repeat: bool=True):
+    def build_graph_network(self, repeat: bool = True):
         """Generates or extracts graphs of selected images."""
 
-        self.update_status(ProgressData(percent=0, sender="GT", message=f"Starting graph extraction..."))
+        self.update_status(
+            ProgressData(percent=0, sender="GT", message="Starting graph extraction...")
+        )
         try:
             # Get the selected batch
-            self.selected_batch_view= 'graph'
+            self.selected_batch_view = "graph"
             sel_batch = self.selected_batch
             sel_images = self.get_batch_images(sel_batch)
 
             if sel_batch.is_graph_only:
-                self.update_status(ProgressData(percent=20, sender="GT", message=f"Fetching graph file..."))
+                self.update_status(
+                    ProgressData(
+                        percent=20, sender="GT", message="Fetching graph file..."
+                    )
+                )
                 f_name, out_dir = self.get_filenames(file_path=self._graph_file)
 
                 sel_batch.graph_obj.abort = False
                 sel_batch.graph_obj.add_listener(self.track_progress)
-                sel_batch.graph_obj.fit_graph(out_dir, input_data=self._graph_file, file_name=f_name)
+                sel_batch.graph_obj.fit_graph(
+                    out_dir, input_data=self._graph_file, file_name=f_name
+                )
                 sel_batch.graph_obj.remove_listener(self.track_progress)
             else:
                 # Get binary image
-                self.update_status(ProgressData(percent=20, sender="GT", message=f"Getting binary image..."))
+                self.update_status(
+                    ProgressData(
+                        percent=20, sender="GT", message="Getting binary image..."
+                    )
+                )
                 img_bin = [img.img_bin for img in sel_images]
                 img_bin = np.asarray(img_bin)
 
                 # Check if filters have been applied
                 if img_bin[0] is None:
-                    self.update_status(ProgressData(type="warning", sender="GT", message=f"No filters applied! Please wait, applying image filters."))
+                    self.update_status(
+                        ProgressData(
+                            type="warning",
+                            sender="GT",
+                            message="No filters applied! Please wait, applying image filters.",
+                        )
+                    )
                     self.apply_img_filters()
                     if repeat:
                         self.build_graph_network(repeat=False)
                     return
 
                 # Get the selected batch's graph object and generate the graph
-                px_size = float(sel_batch.images[0].configs["pixel_width"]["value"])  # First BaseImage in batch
-                rho_val = float(sel_batch.images[0].configs["resistivity"]["value"])  # First BaseImage in batch
+                px_size = float(
+                    sel_batch.images[0].configs["pixel_width"]["value"]
+                )  # First BaseImage in batch
+                rho_val = float(
+                    sel_batch.images[0].configs["resistivity"]["value"]
+                )  # First BaseImage in batch
                 f_name, out_dir = self.get_filenames()
 
                 sel_batch.graph_obj.abort = False
                 sel_batch.graph_obj.add_listener(self.track_progress)
-                sel_batch.graph_obj.fit_graph(out_dir, img_bin, sel_batch.is_2d, px_size, rho_val, file_name=f_name)
+                sel_batch.graph_obj.fit_graph(
+                    out_dir,
+                    img_bin,
+                    sel_batch.is_2d,
+                    px_size,
+                    rho_val,
+                    file_name=f_name,
+                )
 
-            self.update_status(ProgressData(percent=95, sender="GT", message=f"Plotting graph network..."))
+            self.update_status(
+                ProgressData(
+                    percent=95, sender="GT", message="Plotting graph network..."
+                )
+            )
             self.draw_graph_image(sel_batch)
 
             sel_batch.graph_obj.remove_listener(self.track_progress)
             self.abort = sel_batch.graph_obj.abort
             if self.abort:
-                self.selected_batch_view = 'grayscale'
+                self.selected_batch_view = "grayscale"
                 return
         except Exception as err:
             self.abort = True
-            logging.exception("Graph Extraction Error: %s", err, extra={'user': 'SGT Logs'})
-            self.update_status(ProgressData(type="error", sender="GT", message=f"Graph Extraction Error: {err}"))
+            logging.exception(
+                "Graph Extraction Error: %s", err, extra={"user": "SGT Logs"}
+            )
+            self.update_status(
+                ProgressData(
+                    type="error", sender="GT", message=f"Graph Extraction Error: {err}"
+                )
+            )
             return
 
-    def build_graph_from_patches(self, num_kernels: int, patch_count_per_kernel: int, img_padding: tuple = (0, 0),
-                                 compute_avg: bool = False):
+    def build_graph_from_patches(
+        self,
+        num_kernels: int,
+        patch_count_per_kernel: int,
+        img_padding: tuple = (0, 0),
+        compute_avg: bool = False,
+    ):
         """
         Extracts graphs from smaller square patches of selected images.
 
@@ -834,7 +1061,7 @@ class ImageProcessor(ProgressUpdate):
 
         """
         # Get the selected batch
-        patch_count_per_kernel = patch_count_per_kernel if patch_count_per_kernel > 5 else 5
+        patch_count_per_kernel = max(5, patch_count_per_kernel)
         graph_configs = self.graph_obj.configs
         img_obj = self.image_obj  # ONLY works for 2D
 
@@ -862,11 +1089,13 @@ class ImageProcessor(ProgressUpdate):
             # Retrieve kernel patches and compute GT descriptors
             lst_img_90pct = []
             for y, x in slide_positions:
-                img_90pct = img_bin[y:y + k_h, x:x + k_w]
+                img_90pct = img_bin[y : y + k_h, x : x + k_w]
                 lst_img_90pct.append(img_90pct)
             return lst_img_90pct
 
-        def retrieve_kernel_patches(img: np.ndarray|None, num_filters: int, num_patches: int, padding: tuple) -> list[BaseImage.ScalingKernel]:
+        def retrieve_kernel_patches(
+            img: np.ndarray | None, num_filters: int, num_patches: int, padding: tuple
+        ) -> list[BaseImage.ScalingKernel]:
             """
             Perform an incomplete convolution operation that breaks down an image into smaller square mini-images.
             Extract all patches from the image based on filter size, stride, and padding, similar to
@@ -915,7 +1144,7 @@ class ImageProcessor(ProgressUpdate):
                     x = np.random.randint(0, img_w - k_w)
                     y = np.random.randint(0, img_h - k_h)
 
-                    patch = img_padded[y:y + k_h, x:x + k_w].copy()
+                    patch = img_padded[y : y + k_h, x : x + k_w].copy()
                     lst_patches.append(patch)
                     # print(f"Filter Shape: {patch.shape} at strides: x={x}, y={y}")
                 return lst_patches
@@ -925,11 +1154,13 @@ class ImageProcessor(ProgressUpdate):
 
             # Pad the image
             pad_h, pad_w = padding
-            img_padded = np.pad(img.copy(), ((pad_h, pad_h), (pad_w, pad_w)), mode='constant')
+            img_padded = np.pad(
+                img.copy(), ((pad_h, pad_h), (pad_w, pad_w)), mode="constant"
+            )
 
             # Get largest image dimension (height or width)
             h, w = img.shape[:2]
-            max_dim = h if h < w else w
+            max_dim = min(w, h)
 
             # For each filter-window: (1) estimate HxW, (2) stride size and (3) sliding window patch retrieval
             for k in range(num_filters):
@@ -953,11 +1184,19 @@ class ImageProcessor(ProgressUpdate):
 
         if len(img_obj.square_segments) <= 0:
             # Scaling patches (square kernel)
-            lst_filters = retrieve_kernel_patches(img_obj.img_bin, num_kernels, patch_count_per_kernel, img_padding)
+            lst_filters = retrieve_kernel_patches(
+                img_obj.img_bin, num_kernels, patch_count_per_kernel, img_padding
+            )
 
             # Average patches with sizes 90% of the image (rectangular kernel)
             if compute_avg:
-                self.update_status(ProgressData(percent=66, sender="GT", message=f"Computing GT parameters on 95% of image at 4 locations..."))
+                self.update_status(
+                    ProgressData(
+                        percent=66,
+                        sender="GT",
+                        message="Computing GT parameters on 95% of image at 4 locations...",
+                    )
+                )
                 lst_img_filters = extract_cropped_image_patches()
                 c_h, c_w = lst_img_filters[0].shape[:2]
                 crop_filter = BaseImage.ScalingKernel(
@@ -970,7 +1209,13 @@ class ImageProcessor(ProgressUpdate):
         filter_count = len(img_obj.square_segments)
         graph_groups = defaultdict(list)
         for i, scale_filter in enumerate(img_obj.square_segments):
-            self.update_status(ProgressData(type="warning", sender="GT", message=f"Extracting random graphs using image filter {i + 1}/{filter_count}..."))
+            self.update_status(
+                ProgressData(
+                    type="warning",
+                    sender="GT",
+                    message=f"Extracting random graphs using image filter {i + 1}/{filter_count}...",
+                )
+            )
             # num_img_patches = len(scale_filter.image_patches)
             for bin_img_patch in scale_filter.image_patches:
                 graph_patch = FiberNetworkBuilder(cfg_file=self._config_file)
@@ -982,17 +1227,33 @@ class ImageProcessor(ProgressUpdate):
                     height, width = bin_img_patch.shape
                     graph_groups[(height, width)].append(graph_patch.nx_giant_graph)
                 else:
-                    self.update_status(ProgressData(type="warning", sender="GT", message=f"Filter {bin_img_patch.shape} graph extraction failed!"))
+                    self.update_status(
+                        ProgressData(
+                            type="warning",
+                            sender="GT",
+                            message=f"Filter {bin_img_patch.shape} graph extraction failed!",
+                        )
+                    )
         return graph_groups
 
-    def update_graph_rating(self, score: float) -> str|None:
+    def update_graph_rating(self, score: float | None) -> str | None:
         """Updates the score rating of the extracted graph."""
         if score is None:
-            self.update_status(ProgressData(type="warning", sender="AI", message=f"The score cannot be None!"))
+            self.update_status(
+                ProgressData(
+                    type="warning", sender="AI", message="The score cannot be None!"
+                )
+            )
             return None
 
-        if score < 0  or score > 100:
-            self.update_status(ProgressData(type="warning", sender="AI", message=f"The score rating is out of range! Please try 0-100."))
+        if score < 0 or score > 100:
+            self.update_status(
+                ProgressData(
+                    type="warning",
+                    sender="AI",
+                    message="The score rating is out of range! Please try 0-100.",
+                )
+            )
             return None
 
         # 1. Update rating
@@ -1004,16 +1265,24 @@ class ImageProcessor(ProgressUpdate):
 
         # 3. Save the graph image as JPG
         if self.graph_obj.img_ntwk is None:
-            self.update_status(ProgressData(type="warning", sender="AI", message=f"No graph extracted! Please extract a graph first."))
+            self.update_status(
+                ProgressData(
+                    type="warning",
+                    sender="AI",
+                    message="No graph extracted! Please extract a graph first.",
+                )
+            )
             return None
         img_file_name, out_dir = self.get_filenames()
         graph_filename = img_file_name + f"_rated_graph-{int(score)}percent.jpg"
         graph_file = os.path.join(out_dir, graph_filename)
         cv2.imwrite(graph_file, self.graph_obj.img_ntwk)
-        self.update_status(ProgressData(type="warning", sender="AI", message=f"Graph image downloaded!"))
+        self.update_status(
+            ProgressData(type="warning", sender="AI", message="Graph image downloaded!")
+        )
         return graph_file
 
-    def get_filenames(self, file_path: str|None = None):
+    def get_filenames(self, file_path: str | None = None):
         """
         Splits the image path into file name and image directory.
 
@@ -1023,23 +1292,27 @@ class ImageProcessor(ProgressUpdate):
             filename (str): image file name., output_dir (str): image directory path.
         """
 
-        img_dir, filename = os.path.split(self._img_path) if file_path is None else os.path.split(file_path)
-        output_dir = img_dir if self._output_dir == '' else self._output_dir
+        img_dir, filename = (
+            os.path.split(self._img_path)
+            if file_path is None
+            else os.path.split(file_path)
+        )
+        output_dir = img_dir if self._output_dir == "" else self._output_dir
 
         for ext in ALLOWED_IMG_EXTENSIONS:
-            ext = ext.replace('*', '')
-            pattern = re.escape(ext) + r'$'
-            filename = re.sub(pattern, '', filename)
+            ext = ext.replace("*", "")
+            pattern = re.escape(ext) + r"$"
+            filename = re.sub(pattern, "", filename)
 
         for ext in ALLOWED_GRAPH_FILE_EXTENSIONS:
-            ext = ext.replace('*', '')
-            pattern = re.escape(ext) + r'$'
-            filename = re.sub(pattern, '', filename)
+            ext = ext.replace("*", "")
+            pattern = re.escape(ext) + r"$"
+            filename = re.sub(pattern, "", filename)
 
         for ext in ALLOWED_3D_IMG_EXTENSIONS:
-            ext = ext.replace('*', '')
-            pattern = re.escape(ext) + r'$'
-            filename = re.sub(pattern, '', filename)
+            ext = ext.replace("*", "")
+            pattern = re.escape(ext) + r"$"
+            filename = re.sub(pattern, "", filename)
         return filename, output_dir
 
     def get_batch_images(self, selected_batch: ImageBatch):
@@ -1050,10 +1323,12 @@ class ImageProcessor(ProgressUpdate):
         if selected_batch is None:
             selected_batch = self.selected_batch
 
-        sel_images = [selected_batch.images[i] for i in selected_batch.selected_images_positions]
+        sel_images = [
+            selected_batch.images[i] for i in selected_batch.selected_images_positions
+        ]
         return sel_images
 
-    def update_image_props(self, selected_batch: ImageBatch|None = None):
+    def update_image_props(self, selected_batch: ImageBatch | None = None):
         """
         A method that retrieves image properties and stores them in a list-array.
 
@@ -1077,21 +1352,28 @@ class ImageProcessor(ProgressUpdate):
                 return
             else:
                 # (Height, Width, Channels)
-                _, fmt = BaseImage.check_alpha_channel(selected_batch.images[0].img_raw)  # first image
+                _, fmt = BaseImage.check_alpha_channel(
+                    selected_batch.images[0].img_raw
+                )  # first image
                 num_dim = 2
         else:
             # No Image Found
             return
 
         slices = 0
-        img_shape = img_t.shape[:2] if (img_t := selected_batch.images[0].img_2d) is not None else [0, 0]
+        img_shape = (
+            img_t.shape[:2]
+            if (img_t := selected_batch.images[0].img_2d) is not None
+            else [0, 0]
+        )
         height, width = img_shape  # first image
         if num_dim >= 3:
             slices = len(selected_batch.images)
 
         props = [
             ["Name", f_name],
-            ["Height x Width", f"({height} x {width}) pixels"] if slices == 0
+            ["Height x Width", f"({height} x {width}) pixels"]
+            if slices == 0
             else ["Depth x H x W", f"({slices} x {height} x {width}) pixels"],
             ["Dimensions", f"{num_dim}D"],
             ["Format", f"{fmt}"],
@@ -1112,11 +1394,15 @@ class ImageProcessor(ProgressUpdate):
                 crop_filename = f"{img_file_name}_cropped.jpg"
                 crop_file = os.path.join(out_dir, crop_filename)
                 cv2.imwrite(crop_file, img_obj.img_2d)
-                self.update_status(ProgressData(type="warning", sender="GT", message=f"Cropped image saved!"))
+                self.update_status(
+                    ProgressData(
+                        type="warning", sender="GT", message="Cropped image saved!"
+                    )
+                )
             return
 
         sel_images = self.get_batch_images(sel_batch)
-        is_3d = True if len(sel_images) > 1 else False
+        is_3d = len(sel_images) > 1
 
         for i, img in enumerate(sel_images):
             if img.configs["save_images"]["value"] == 0:
@@ -1152,9 +1438,13 @@ class ImageProcessor(ProgressUpdate):
         if sel_batch.graph_obj is None:
             return
 
-        plt_fig = sel_batch.graph_obj.plot_graph_network(image_arr=img_3d, giant_only=show_giant_only)
+        plt_fig = sel_batch.graph_obj.plot_graph_network(
+            image_arr=img_3d, giant_only=show_giant_only
+        )
         if plt_fig is not None:
-            self.update_status(ProgressData(percent=98, sender="GT", message=f"Graph image created."))
+            self.update_status(
+                ProgressData(percent=98, sender="GT", message="Graph image created.")
+            )
             sel_batch.graph_obj.img_ntwk = plot_to_opencv(plt_fig)
 
     # MODIFIED TO EXCLUDE 3D IMAGES (TO BE REVISITED LATER)
@@ -1163,7 +1453,9 @@ class ImageProcessor(ProgressUpdate):
     # 2. Prune dangling edges
     # 3. Matplotlib plot nodes and edges
     @staticmethod
-    def create_img_batch_groups(img_groups: defaultdict, cfg_file: str, auto_scale: bool):
+    def create_img_batch_groups(
+        img_groups: defaultdict, cfg_file: str, auto_scale: bool
+    ):
         """"""
 
         def get_scaling_options(orig_size: float):
@@ -1171,17 +1463,34 @@ class ImageProcessor(ProgressUpdate):
             orig_size = int(orig_size)
             if orig_size > 2048:
                 recommended_size = 1024
-                scaling_options = [1024, 2048, int(orig_size * 0.25), int(orig_size * 0.5), int(orig_size * 0.75),
-                                   orig_size]
+                scaling_options = [
+                    1024,
+                    2048,
+                    int(orig_size * 0.25),
+                    int(orig_size * 0.5),
+                    int(orig_size * 0.75),
+                    orig_size,
+                ]
             elif orig_size > 1024:
                 recommended_size = 1024
-                scaling_options = [1024, int(orig_size * 0.25), int(orig_size * 0.5), int(orig_size * 0.75), orig_size]
+                scaling_options = [
+                    1024,
+                    int(orig_size * 0.25),
+                    int(orig_size * 0.5),
+                    int(orig_size * 0.75),
+                    orig_size,
+                ]
             else:
                 recommended_size = orig_size
-                scaling_options = [int(orig_size * 0.25), int(orig_size * 0.5), int(orig_size * 0.75), orig_size]
+                scaling_options = [
+                    int(orig_size * 0.25),
+                    int(orig_size * 0.5),
+                    int(orig_size * 0.75),
+                    orig_size,
+                ]
 
             # Remove duplicates and arrange in ascending order
-            scaling_options = sorted(list(set(scaling_options)))
+            scaling_options = sorted(set(scaling_options))
             scaling_data = []
             for val in scaling_options:
                 data = {"text": f"{val} px", "value": 0, "dataValue": val}
@@ -1206,7 +1515,11 @@ class ImageProcessor(ProgressUpdate):
             scale_size = 0
             for scale_item in scale_options:
                 try:
-                    scale_size = scale_item["dataValue"] if scale_item["value"] == 1 else scale_size
+                    scale_size = (
+                        scale_item["dataValue"]
+                        if scale_item["value"] == 1
+                        else scale_size
+                    )
                 except KeyError:
                     continue
 
@@ -1242,12 +1555,32 @@ class ImageProcessor(ProgressUpdate):
 
             # Convert back to numpy arrays
             images = images_small if len(images_small) > 0 else images
-            #images = np.array([images[0]])  # REMOVE TO ALLOW 3D
-            views  = [
-                {"text": "Original Image", "dataValue": "original", "value": 1, "visible": 1 },
-                {"text": "Binary Image", "dataValue": "binary", "value": 0, "visible": 1 },
-                {"text": "Grayscale Image", "dataValue": "grayscale", "value": 0, "visible": 1 },
-                {"text": "Extracted Graph", "dataValue": "graph", "value": 0, "visible": 1}
+            # images = np.array([images[0]])  # REMOVE TO ALLOW 3D
+            views = [
+                {
+                    "text": "Original Image",
+                    "dataValue": "original",
+                    "value": 1,
+                    "visible": 1,
+                },
+                {
+                    "text": "Binary Image",
+                    "dataValue": "binary",
+                    "value": 0,
+                    "visible": 1,
+                },
+                {
+                    "text": "Grayscale Image",
+                    "dataValue": "grayscale",
+                    "value": 0,
+                    "visible": 1,
+                },
+                {
+                    "text": "Extracted Graph",
+                    "dataValue": "graph",
+                    "value": 0,
+                    "visible": 1,
+                },
             ]
             img_indices = range(len(images))
             img_batch = ImageProcessor.ImageBatch(
@@ -1261,16 +1594,22 @@ class ImageProcessor(ProgressUpdate):
                 scale_factor=scaling_factor,
                 scaling_options=scaling_opts,
                 selected_images_positions=set(img_indices),
-                selected_frame_pos= 0,
+                selected_frame_pos=0,
                 view_options=views,
                 ai_mode_active=False,
             )
             img_info_list.append(img_batch)
-            #break # REMOVE TO ALLOW 3D
+            # break # REMOVE TO ALLOW 3D
         return img_info_list
 
     @classmethod
-    def from_image_file(cls, img_path: str, out_folder: str = "", config_file: str = "", allow_auto_scale: bool = True) -> tuple["ImageProcessor", str]:
+    def from_image_file(
+        cls,
+        img_path: str,
+        out_folder: str = "",
+        config_file: str = "",
+        allow_auto_scale: bool = True,
+    ) -> tuple[ImageProcessor, str]:
         """
         Creates an ImageProcessor object. Make sure the image path exists, is verified, and points to an image.
         :param img_path: Path to the image to be processed
@@ -1287,11 +1626,11 @@ class ImageProcessor(ProgressUpdate):
 
         is_prefix = True
         # Regex pattern to extract the prefix (non-digit characters at the beginning of the file name)
-        img_name_pattern = re.match(r'^([a-zA-Z_]+)(\d+)(?=\.[a-zA-Z]+$)', img_file)
+        img_name_pattern = re.match(r"^([a-zA-Z_]+)(\d+)(?=\.[a-zA-Z]+$)", img_file)
         if img_name_pattern is None:
             # Regex pattern to extract the suffix (non-digit characters at the end of the file name)
             is_prefix = False
-            img_name_pattern = re.match(r'^\d+([a-zA-Z_]+)(?=\.[a-zA-Z]+$)', img_file)
+            img_name_pattern = re.match(r"^\d+([a-zA-Z_]+)(?=\.[a-zA-Z]+$)", img_file)
 
         # If 3D file (ignore multiple input files)
         """allowed_3d_extensions = tuple(ext[1:] if ext.startswith('*.') else ext for ext in ALLOWED_3D_IMG_EXTENSIONS)
@@ -1302,8 +1641,13 @@ class ImageProcessor(ProgressUpdate):
         if img_name_pattern:
             img_files.append(img_path)
             f_name = img_name_pattern.group(1)
-            name_pattern = re.compile(rf'^{f_name}\d+{re.escape(img_file_ext)}$', re.IGNORECASE) \
-                if is_prefix else re.compile(rf'^\d+{f_name}{re.escape(img_file_ext)}$', re.IGNORECASE)
+            name_pattern = (
+                re.compile(rf"^{f_name}\d+{re.escape(img_file_ext)}$", re.IGNORECASE)
+                if is_prefix
+                else re.compile(
+                    rf"^\d+{f_name}{re.escape(img_file_ext)}$", re.IGNORECASE
+                )
+            )
 
             # Check if 3D image slices exist in the image folder. Same file name but different number
             files = sorted(os.listdir(img_dir))
@@ -1328,7 +1672,9 @@ class ImageProcessor(ProgressUpdate):
         return imp_obj, img_file
 
     @classmethod
-    def from_graph_file(cls, file_path: str, out_folder: str = "") -> tuple["ImageProcessor", str]:
+    def from_graph_file(
+        cls, file_path: str, out_folder: str = ""
+    ) -> tuple[ImageProcessor, str]:
         """
         Creates an ImageProcessor object. Make sure the graph file path exists, is verified, and points to a
         CSV file or GSD/HOOMD file.
@@ -1339,7 +1685,10 @@ class ImageProcessor(ProgressUpdate):
         # Separate graph path and folder
         file_dir, graph_file = os.path.split(str(file_path))
         file_ext = os.path.splitext(graph_file)[1].lower()
-        allowed_extensions = tuple(ext[1:] if ext.startswith('*.') else ext for ext in ALLOWED_GRAPH_FILE_EXTENSIONS)
+        allowed_extensions = tuple(
+            ext[1:] if ext.startswith("*.") else ext
+            for ext in ALLOWED_GRAPH_FILE_EXTENSIONS
+        )
         if not graph_file.endswith(allowed_extensions):
             raise ValueError(f"Unsupported file format: {file_ext}")
 
@@ -1360,16 +1709,26 @@ class ImageProcessor(ProgressUpdate):
 
         # Create an Image Batch data object and add it to the ImageProcessor object
         views = [
-            {"text": "Original Image", "dataValue": "original", "value": 0, "visible": 0},
+            {
+                "text": "Original Image",
+                "dataValue": "original",
+                "value": 0,
+                "visible": 0,
+            },
             {"text": "Binary Image", "dataValue": "binary", "value": 0, "visible": 0},
-            {"text": "Grayscale Image", "dataValue": "grayscale", "value": 0, "visible": 0},
-            {"text": "Extracted Graph", "dataValue": "graph", "value": 1, "visible": 1}
+            {
+                "text": "Grayscale Image",
+                "dataValue": "grayscale",
+                "value": 0,
+                "visible": 0,
+            },
+            {"text": "Extracted Graph", "dataValue": "graph", "value": 1, "visible": 1},
         ]
         img_batch = ImageProcessor.ImageBatch(
             numpy_image=np.array([None]),
             images=[BaseImage(None)],
             graph_obj=graph_obj,
-            shape=(0,0),
+            shape=(0, 0),
             props=[],
             is_2d=True,
             is_graph_only=True,
@@ -1378,7 +1737,7 @@ class ImageProcessor(ProgressUpdate):
             selected_images_positions=set(),
             selected_frame_pos=0,
             view_options=views,
-            ai_mode_active=False
+            ai_mode_active=False,
         )
         imp_obj._image_batches = [img_batch]
         return imp_obj, graph_file

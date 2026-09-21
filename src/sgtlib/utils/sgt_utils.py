@@ -4,22 +4,23 @@
 StructuralGT utility functions.
 """
 
-import os
-import io
-import sys
-import cv2
-import csv
 import base64
+import csv
+import io
 import logging
-import gsd.hoomd
+import multiprocessing as mp
+import os
 import subprocess
+import sys
+from dataclasses import dataclass
+
+import cv2
+import gsd.hoomd
+import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
 import pandas as pd
-import networkx as nx
-import multiprocessing as mp
-import matplotlib.pyplot as plt
 from PIL import Image
-from dataclasses import dataclass
 
 
 @dataclass
@@ -38,6 +39,7 @@ class ProgressData:
     sender : str
         Sender of the message.
     """
+
     percent: int = -1
     message: str = ""
     type: str = ""  # "info", "warning", "error"
@@ -49,12 +51,11 @@ class TaskResult:
     task_id: str = ""
     status: str = ""
     message: str = ""
-    data: object|list|None = None
+    data: object | list | None = None
 
 
 class AbortException(Exception):
     """Custom exception to handle task cancellation initiated by the user or an error."""
-    pass
 
 
 class ProgressUpdate:
@@ -147,16 +148,16 @@ def get_num_cores() -> int | bool:
         :return: Count of CPUs (int) or False
         """
         try:
-            cores = int(os.environ['SLURM_JOB_CPUS_PER_NODE'])
+            cores = int(os.environ["SLURM_JOB_CPUS_PER_NODE"])
             return cores
         except ValueError:
             try:
-                str_cores = str(os.environ['SLURM_JOB_CPUS_PER_NODE'])
-                temp = str_cores.split('(', 1)
+                str_cores = str(os.environ["SLURM_JOB_CPUS_PER_NODE"])
+                temp = str_cores.split("(", 1)
                 cpus = int(temp[0])
                 str_nodes = temp[1]
-                temp = str_nodes.split('x', 1)
-                str_temp = str(temp[1]).split(')', 1)
+                temp = str_nodes.split("x", 1)
+                str_temp = str(temp[1]).split(")", 1)
                 nodes = int(str_temp[0])
                 cores = cpus * nodes
                 return cores
@@ -195,23 +196,26 @@ def verify_path(a_path) -> tuple[bool, str]:
 def install_package(package) -> None:
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        logging.info(f"Successfully installed {package}", extra={'user': 'SGT Logs'})
+        logging.info(f"Successfully installed {package}", extra={"user": "SGT Logs"})
     except subprocess.CalledProcessError:
-        logging.info(f"Failed to install {package}: ", extra={'user': 'SGT Logs'})
+        logging.info(f"Failed to install {package}: ", extra={"user": "SGT Logs"})
 
 
 def detect_cuda_version() -> str | None:
     """Check if CUDA is installed and return its version."""
     try:
-        output = subprocess.check_output(['nvcc', '--version']).decode()
-        if 'release 12' in output:
-            return '12'
-        elif 'release 11' in output:
-            return '11'
+        output = subprocess.check_output(["nvcc", "--version"]).decode()
+        if "release 12" in output:
+            return "12"
+        elif "release 11" in output:
+            return "11"
         else:
             return None
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        logging.info(f"Please install 'NVIDIA GPU Computing Toolkit' via: https://developer.nvidia.com/cuda-downloads", extra={'user': 'SGT Logs'})
+    except subprocess.CalledProcessError, FileNotFoundError:
+        logging.info(
+            "Please install 'NVIDIA GPU Computing Toolkit' via: https://developer.nvidia.com/cuda-downloads",
+            extra={"user": "SGT Logs"},
+        )
         return None
 
 
@@ -276,22 +280,22 @@ def detect_cuda_and_install_cupy():
 
 def write_txt_file(data: str, path: str | bytes, wr=True) -> None:
     """Description
-        Writes data into a txt file.
+    Writes data into a txt file.
 
-        :param data: Information to be written
-        :param path: name of the file and storage path
-        :param wr: writes data into file if True
-        :return:
+    :param data: Information to be written
+    :param path: name of the file and storage path
+    :param wr: writes data into file if True
+    :return:
     """
     if wr:
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             f.write(data)
             f.close()
     else:
         pass
 
 
-def write_gsd_file(f_name: str|None, skeleton: np.ndarray|None) -> None:
+def write_gsd_file(f_name: str | None, skeleton: np.ndarray | None) -> None:
     """
     A function that writes graph particles to a GSD file. Visualize with OVITO software.
     Acknowledgements: Alain Kadar (https://github.com/compass-stc/StructuralGT/)
@@ -313,7 +317,7 @@ def write_gsd_file(f_name: str|None, skeleton: np.ndarray|None) -> None:
         f.append(s)
 
 
-def gsd_to_skeleton(gsd_file: str, is_2d:bool=False) -> None | np.ndarray:
+def gsd_to_skeleton(gsd_file: str, is_2d: bool = False) -> None | np.ndarray:
     """
     A function that takes a gsd file and returns a NetworkX graph object.
     Acknowledgements: Alain Kadar (https://github.com/compass-stc/StructuralGT/)
@@ -363,7 +367,7 @@ def gsd_to_skeleton(gsd_file: str, is_2d:bool=False) -> None | np.ndarray:
         """
 
         unique_positions = np.asarray(
-            list(len(np.unique(all_positions.T[i])) for i in range(len(all_positions.T)))
+            [len(np.unique(all_positions.T[i])) for i in range(len(all_positions.T))]
         )
         redundant = unique_positions == 1
         all_positions = all_positions.T[~redundant].T
@@ -389,10 +393,9 @@ def gsd_to_skeleton(gsd_file: str, is_2d:bool=False) -> None | np.ndarray:
         positions = new_pos.T.astype(int)
 
     skel_int = np.zeros(
-        list((max(positions.T[i]) + 1) for i in list(
-            range(min(positions.shape))))
+        [(max(positions.T[i]) + 1) for i in list(range(min(positions.shape)))]
     )
-    skel_int[tuple(list(positions.T))] = 1
+    skel_int[tuple(positions.T)] = 1
     return skel_int.astype(int)
 
 
@@ -439,6 +442,7 @@ def csv_to_graph(csv_path: str) -> None | nx.Graph:
     # Case 3: XYZ positions (three columns)
     elif data.ndim == 2 and data.shape[1] == 3:
         from scipy.spatial import distance_matrix
+
         # Build graph based on proximity (set threshold distance)
         threshold = 1.0
         dist_mat = distance_matrix(data, data)
@@ -468,7 +472,7 @@ def csv_to_numpy(csv_path: str) -> np.ndarray | None:
 
     try:
         # 1. Use the csv sniffer to detect a header
-        with open(csv_path, newline='') as csvfile:
+        with open(csv_path, newline="") as csvfile:
             sniffer = csv.Sniffer()
             # Read a sample to let the sniffer work. 2048 bytes is an arbitrary number sufficient for a few rows.
             sample = csvfile.read(2048)
@@ -479,18 +483,19 @@ def csv_to_numpy(csv_path: str) -> np.ndarray | None:
 
         # 2. Set the 'header' parameter for pandas accordingly
         if has_header:
-            header_param = None  # If a header exists, tell pandas there is NO header in the DATA
+            header_param = (
+                None  # If a header exists, tell pandas there is NO header in the DATA
+            )
             skip_rows_param = 1  # Skip the first row which is the header
         else:
-            header_param = None  # No header exists, so use None (pandas default is header=0)
+            header_param = (
+                None  # No header exists, so use None (pandas default is header=0)
+            )
             skip_rows_param = 0  # No rows to skip
 
         # 3. Read the CSV data using pandas
         df = pd.read_csv(
-            csv_path,
-            header=header_param,
-            skiprows=skip_rows_param,
-            index_col=False
+            csv_path, header=header_param, skiprows=skip_rows_param, index_col=False
         )
 
         # 4. Convert the DataFrame to a NumPy array as requested
@@ -502,14 +507,14 @@ def csv_to_numpy(csv_path: str) -> np.ndarray | None:
 
 
 def img_to_base64(img: np.ndarray | Image.Image) -> str:
-    """ Converts a Numpy/OpenCV or PIL image to a base64 encoded string."""
+    """Converts a Numpy/OpenCV or PIL image to a base64 encoded string."""
 
-    def opencv_to_base64(img_arr: np.ndarray|None) -> str:
+    def opencv_to_base64(img_arr: np.ndarray | None) -> str:
         """Convert an OpenCV/Numpy image to a base64 string."""
         if img_arr is None:
             return ""
 
-        success, encoded_img = cv2.imencode('.png', img_arr)
+        success, encoded_img = cv2.imencode(".png", img_arr)
         if success:
             buffer = io.BytesIO(encoded_img.tobytes())
             buffer.seek(0)
@@ -538,7 +543,7 @@ def plot_to_opencv(fig: plt.Figure) -> np.ndarray | None:
     if fig:
         # Save a figure to a buffer
         buf = io.BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight')
+        fig.savefig(buf, format="png", bbox_inches="tight")
         buf.seek(0)
 
         # Convert buffer to NumPy array
@@ -560,7 +565,7 @@ def plot_to_opencv(fig: plt.Figure) -> np.ndarray | None:
     return None
 
 
-def safe_uint8_image(img: np.ndarray|None) -> np.ndarray | None:
+def safe_uint8_image(img: np.ndarray | None) -> np.ndarray | None:
     """
     Converts an image to uint8 safely:
         - If already uint8, returns as is.

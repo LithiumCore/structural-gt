@@ -5,10 +5,11 @@ Create a graph skeleton from an image binary
 """
 
 import math
+
 import numpy as np
 from scipy import ndimage
-from skimage.morphology import dilation as dilate, closing
-from skimage.morphology import disk, skeletonize, remove_small_objects
+from skimage.morphology import closing, disk, remove_small_objects, skeletonize
+from skimage.morphology import dilation as dilate
 
 from ..utils.sgt_utils import ProgressData
 
@@ -16,7 +17,13 @@ from ..utils.sgt_utils import ProgressData
 class GraphSkeleton:
     """A class that is used for estimating the width of edges and compute their weights using binerized 2D/3D images."""
 
-    def __init__(self, img_bin: np.ndarray, configs:dict|None = None, is_2d: bool = True, progress_func = None):
+    def __init__(
+        self,
+        img_bin: np.ndarray,
+        configs: dict | None = None,
+        is_2d: bool = True,
+        progress_func=None,
+    ):
         """
         A class that builds a skeleton graph from an image.
         The skeleton will be 3D so that it can be analyzed with OVITO
@@ -83,31 +90,63 @@ class GraphSkeleton:
 
         if self._configs["merge_nearby_nodes"]["value"] == 1:
             if self._update_progress is not None:
-                self._update_progress(ProgressData(percent=52, sender="GT", message=f"Merging nearby nodes in the skeleton..."))
-            node_radius_size = 2 # int(self.configs["merge_nearby_nodes"]["items"][0]["value"])
+                self._update_progress(
+                    ProgressData(
+                        percent=52,
+                        sender="GT",
+                        message="Merging nearby nodes in the skeleton...",
+                    )
+                )
+            node_radius_size = (
+                2  # int(self.configs["merge_nearby_nodes"]["items"][0]["value"])
+            )
             temp_skeleton = GraphSkeleton.merge_nodes(temp_skeleton, node_radius_size)
 
         if self._configs["remove_disconnected_segments"]["value"] == 1:
             if self._update_progress is not None:
                 self._update_progress(
-                    ProgressData(percent=54, sender="GT", message=f"Removing small disconnected segments from the skeleton..."))
-            min_size = int(self._configs["remove_disconnected_segments"]["items"][0]["value"])
-            temp_skeleton = remove_small_objects(temp_skeleton, min_size=min_size, connectivity=2)
+                    ProgressData(
+                        percent=54,
+                        sender="GT",
+                        message="Removing small disconnected segments from the skeleton...",
+                    )
+                )
+            min_size = int(
+                self._configs["remove_disconnected_segments"]["items"][0]["value"]
+            )
+            temp_skeleton = remove_small_objects(
+                temp_skeleton, min_size=min_size, connectivity=2
+            )
 
         if self._configs["prune_dangling_edges"]["value"] == 1:
             if self._update_progress is not None:
                 self._update_progress(
-                    ProgressData(percent=56, sender="GT", message=f"Pruning dangling edges from skeleton..."))
-            max_iter = 500 # int(self.configs["prune_dangling_edges"]["items"][0]["value"])
+                    ProgressData(
+                        percent=56,
+                        sender="GT",
+                        message="Pruning dangling edges from skeleton...",
+                    )
+                )
+            max_iter = (
+                500  # int(self.configs["prune_dangling_edges"]["items"][0]["value"])
+            )
             b_points = GraphSkeleton.get_branched_points(temp_skeleton)
             temp_skeleton = GraphSkeleton.prune_edges(temp_skeleton, max_iter, b_points)
 
         self._skeleton = np.asarray(temp_skeleton, dtype=np.uint16)
         # self.skeleton = self.skeleton.astype(int)
-        self._skeleton_3d = np.asarray([self._skeleton]) if self._is_2d else self._skeleton
+        self._skeleton_3d = (
+            np.asarray([self._skeleton]) if self._is_2d else self._skeleton
+        )
 
-    def assign_weights(self, edge_pts: np.ndarray, weight_type: str|None = None, weight_options: dict|None = None,
-                       pixel_dim: float = 1, rho_dim: float = 1) -> tuple[float, float | None, float]:
+    def assign_weights(
+        self,
+        edge_pts: np.ndarray,
+        weight_type: str | None = None,
+        weight_options: dict | None = None,
+        pixel_dim: float = 1,
+        rho_dim: float = 1,
+    ) -> tuple[float, float | None, float]:
         """
         Compute and assign weights to a line edge between 2 nodes.
 
@@ -121,14 +160,14 @@ class GraphSkeleton:
 
         # Initialize parameters: Idea copied from 'sknw' library
         pix_length = np.linalg.norm(edge_pts[1:] - edge_pts[:-1], axis=1).sum()
-        epsilon = 0.001             # to avoid division by zero
+        epsilon = 0.001  # to avoid division by zero
         pix_length += epsilon
 
         if len(edge_pts) < 2:
             # check to see if ge is an empty or unity list, if so, set pixel counts to 0
             # Assume only 1/2 pixel exists between edge points
             pix_width: float = 0.5
-            pix_angle: float|None = None
+            pix_angle: float | None = None
         else:
             # if ge exists, find the midpoint of the trace, and orthogonal unit vector
             pix_width, pix_angle = self._estimate_edge_width(edge_pts)
@@ -136,18 +175,20 @@ class GraphSkeleton:
 
         if weight_type is None or weight_options is None:
             wt: float = pix_width / 10
-        elif weight_options.get(weight_type) == weight_options.get('DIA'):
+        elif weight_options.get(weight_type) == weight_options.get("DIA"):
             wt: float = pix_width * pixel_dim
-        elif weight_options.get(weight_type) == weight_options.get('AREA'):
+        elif weight_options.get(weight_type) == weight_options.get("AREA"):
             wt: float = math.pi * (pix_width * pixel_dim * 0.5) ** 2
-        elif weight_options.get(weight_type) == weight_options.get('LEN') or weight_options.get(weight_type) == weight_options.get('INV_LEN'):
+        elif weight_options.get(weight_type) == weight_options.get(
+            "LEN"
+        ) or weight_options.get(weight_type) == weight_options.get("INV_LEN"):
             wt: float = pix_length * pixel_dim
-            if weight_options.get(weight_type) == weight_options.get('INV_LEN'):
+            if weight_options.get(weight_type) == weight_options.get("INV_LEN"):
                 wt: float = wt + epsilon if wt == 0 else wt
-                wt: float = wt ** -1
-        elif weight_options.get(weight_type) == weight_options.get('DIA_LEN'):
+                wt: float = wt**-1
+        elif weight_options.get(weight_type) == weight_options.get("DIA_LEN"):
             wt: float = pix_width / pix_length
-        elif weight_options.get(weight_type) == weight_options.get('ANGLE'):
+        elif weight_options.get(weight_type) == weight_options.get("ANGLE"):
             """
             Edge angle centrality" in graph theory refers to a measure of an edge's importance within a network, 
             based on the angles formed between the edges connected to its endpoints, essentially assessing how "central" 
@@ -160,23 +201,31 @@ class GraphSkeleton:
             """
             sym_angle = float(np.minimum(pix_angle, (360 - pix_angle)))
             wt: float = (sym_angle + epsilon) ** -1
-        elif weight_options.get(weight_type) == weight_options.get('FIX_CON') or weight_options.get(weight_type) == weight_options.get('VAR_CON') or weight_options.get(weight_type) == weight_options.get('RES'):
+        elif (
+            weight_options.get(weight_type) == weight_options.get("FIX_CON")
+            or weight_options.get(weight_type) == weight_options.get("VAR_CON")
+            or weight_options.get(weight_type) == weight_options.get("RES")
+        ):
             # Varies with width
             length = pix_length * pixel_dim
             area = math.pi * (pix_width * pixel_dim * 0.5) ** 2
-            if weight_options.get(weight_type) == weight_options.get('FIX_CON'):
+            if weight_options.get(weight_type) == weight_options.get("FIX_CON"):
                 area = math.pi * (1 * pixel_dim) ** 2
             num = length * rho_dim
             area = area + epsilon if area == 0 else area
-            num =  num + epsilon if num == 0 else num
-            wt: float = (num / area)  # Resistance
-            if weight_options.get(weight_type) == weight_options.get('VAR_CON') or weight_options.get(weight_type) == weight_options.get('FIX_CON'):
-                wt: float = wt ** -1  # Conductance is inverse of resistance
+            num = num + epsilon if num == 0 else num
+            wt: float = num / area  # Resistance
+            if weight_options.get(weight_type) == weight_options.get(
+                "VAR_CON"
+            ) or weight_options.get(weight_type) == weight_options.get("FIX_CON"):
+                wt: float = wt**-1  # Conductance is inverse of resistance
         else:
-            raise TypeError('Invalid weight type')
+            raise TypeError("Invalid weight type")
         return pix_width, pix_angle, wt
 
-    def _estimate_edge_width(self, graph_edge_coords: np.ndarray) -> tuple[float, float | None]:
+    def _estimate_edge_width(
+        self, graph_edge_coords: np.ndarray
+    ) -> tuple[float, float | None]:
         """Estimates the edge width of a graph edge."""
 
         def find_orthogonal(u: np.ndarray, v: np.ndarray):
@@ -185,7 +234,13 @@ class GraphSkeleton:
             vec = u - v  # find the vector between u and v
 
             if np.linalg.norm(vec) == 0:
-                n = np.array([0, ] * len(u), dtype=np.float16)
+                n = np.array(
+                    [
+                        0,
+                    ]
+                    * len(u),
+                    dtype=np.float16,
+                )
             else:
                 # make 'n' a unit vector along u,v
                 n = vec / float(np.linalg.norm(vec))
@@ -193,13 +248,14 @@ class GraphSkeleton:
             hl = np.linalg.norm(vec) / 2  # find the half-length of the vector u,v
             ortho_arr = np.random.randn(len(u))  # take a random vector
             # u_unit = u / np.linalg.norm(u)
-            ortho_arr -= np.dot(ortho_arr, u) * u # make it orthogonal to vector u,v
+            ortho_arr -= np.dot(ortho_arr, u) * u  # make it orthogonal to vector u,v
             ortho_arr /= np.linalg.norm(ortho_arr)  # make it a unit vector
 
             # Returns the coordinates of the vector u,v midpoint; the orthogonal unit vector
             return (v + n * hl), ortho_arr
 
             # 1. Estimate orthogonal and mid-point
+
         end_index = len(graph_edge_coords) - 1
         pt1 = graph_edge_coords[0]
         pt2 = graph_edge_coords[end_index]
@@ -223,11 +279,15 @@ class GraphSkeleton:
 
         # 3. Estimate width
         check = 0  # initializing boolean check
-        i = 0      # initializing iterative variable
+        i = 0  # initializing iterative variable
         l1 = np.nan
         l2 = np.nan
-        while check == 0:             # iteratively check along orthogonal vector to see if the coordinate is either...
-            pt_check = mid_pt + i * ortho  # ... out of bounds, or no longer within the fiber in img_bin
+        while (
+            check == 0
+        ):  # iteratively check along orthogonal vector to see if the coordinate is either...
+            pt_check = (
+                mid_pt + i * ortho
+            )  # ... out of bounds, or no longer within the fiber in img_bin
             pt_check = pt_check.astype(int)
             is_in_edge = GraphSkeleton.point_check(self._img_bin, pt_check)
 
@@ -279,7 +339,7 @@ class GraphSkeleton:
             pattern.T,
             np.flipud(pattern.T),
             np.fliplr(pattern.T),
-            np.fliplr(np.flipud(pattern.T))
+            np.fliplr(np.flipud(pattern.T)),
         ]
 
     @classmethod
@@ -299,7 +359,7 @@ class GraphSkeleton:
             [[0, 1, 1], [0, 1, 1], [1, 0, 0]],  # clust_branch
             [[1, 1, 1], [0, 1, 1], [1, 0, 0]],  # clust_branch variant
             [[1, 1, 1], [0, 1, 1], [1, 0, 1]],  # clust_branch variant
-            [[1, 0, 0], [1, 1, 1], [0, 1, 0]]  # cross_branch
+            [[1, 0, 0], [1, 1, 1], [0, 1, 0]],  # cross_branch
         ]
 
         # Generate all transformations
@@ -310,11 +370,15 @@ class GraphSkeleton:
         # Remove duplicate patterns (if any)
         unique_patterns = []
         for pattern in all_patterns:
-            if not any(np.array_equal(pattern, existing) for existing in unique_patterns):
+            if not any(
+                np.array_equal(pattern, existing) for existing in unique_patterns
+            ):
                 unique_patterns.append(pattern)
 
         # Apply binary hit-or-miss for all unique patterns
-        br = sum(ndimage.binary_hit_or_miss(skel_int, pattern) for pattern in unique_patterns)
+        br = sum(
+            ndimage.binary_hit_or_miss(skel_int, pattern) for pattern in unique_patterns
+        )
         return br
 
     @classmethod
@@ -334,18 +398,21 @@ class GraphSkeleton:
             [[1, 0, 0], [0, 1, 0], [0, 0, 0]],
             [[0, 0, 0], [1, 1, 0], [0, 0, 0]],
             [[0, 0, 0], [0, 1, 0], [1, 0, 0]],
-            [[0, 0, 0], [0, 1, 0], [0, 0, 0]]
+            [[0, 0, 0], [0, 1, 0], [0, 0, 0]],
         ]
 
         # Apply binary hit-or-miss for each pattern and sum results
-        ep = sum(ndimage.binary_hit_or_miss(skel_int, np.array(pattern)) for pattern in endpoints)
+        ep = sum(
+            ndimage.binary_hit_or_miss(skel_int, np.array(pattern))
+            for pattern in endpoints
+        )
         return ep
 
     @classmethod
     def prune_edges(cls, skeleton: np.ndarray, max_num, branch_points):
         """Prune dangling edges around b_points. Remove iteratively end points 'size' times from the skeleton"""
         temp_skeleton = skeleton.copy()
-        for i in range(0, max_num):
+        for i in range(max_num):
             end_points = GraphSkeleton.get_end_points(temp_skeleton)
             points = np.logical_and(end_points, branch_points)
             end_points = np.logical_xor(end_points, points)
@@ -364,7 +431,7 @@ class GraphSkeleton:
 
         # wide-nodes is initially an empty image the same size as the skeleton image
         skel_shape = skeleton_int.shape
-        wide_nodes = np.zeros(skel_shape, dtype='int')
+        wide_nodes = np.zeros(skel_shape, dtype="int")
 
         # this overlays the two skeletons
         # skeleton_integer is the full map, bp_skel is just the branch points blown up to a larger size
@@ -412,11 +479,21 @@ class GraphSkeleton:
             out_of_bounds = 0  # Generate a boolean check for out-of-boundary
             # Check if coordinate is within the boundary
             if d is None:
-                if coord[0] < 0 or coord[1] < 0 or coord[-2] > (w - 1) or coord[-1] > (h - 1):
+                if (
+                    coord[0] < 0
+                    or coord[1] < 0
+                    or coord[-2] > (w - 1)
+                    or coord[-1] > (h - 1)
+                ):
                     out_of_bounds = 1
             else:
                 # if sum(coord < 0) > 0 or sum(coord > [w - 1, h - 1, d - 1]) > 0:
-                if sum(coord < 0) > 0 or coord[-3] > (d - 1) or coord[-2] > (w - 1) or coord[-1] > (h - 1):
+                if (
+                    sum(coord < 0) > 0
+                    or coord[-3] > (d - 1)
+                    or coord[-2] > (w - 1)
+                    or coord[-1] > (h - 1)
+                ):
                     out_of_bounds = 1
 
             # returns the boolean oob (1 if there is a boundary error); coordinates (resets to (1,1) if boundary error)
@@ -425,7 +502,9 @@ class GraphSkeleton:
         # Check if the image is 2D
         if len(img_bin.shape) == 2:
             is_2d = True
-            height, width = img_bin.shape  # finds dimensions of img_bin for boundary check
+            height, width = (
+                img_bin.shape
+            )  # finds dimensions of img_bin for boundary check
             depth = 0
         else:
             is_2d = False
@@ -435,11 +514,17 @@ class GraphSkeleton:
             if is_2d:
                 # Checks if the point in fiber is out-of-bounds (oob) or black space (img_bin(x,y) = 0)
                 oob = boundary_check(pt_check, width, height)
-                not_in_edge = True if (oob == 1) else True if (img_bin[pt_check[-2], pt_check[-1]] == 0) else False
+                not_in_edge = (
+                    True if (oob == 1) else (img_bin[pt_check[-2], pt_check[-1]] == 0)
+                )
             else:
                 # Checks if the point in fiber is out-of-bounds (oob) or black space (img_bin(d,x,y) = 0)
                 oob = boundary_check(pt_check, width, height, d=depth)
-                not_in_edge = True if (oob == 1) else True if (img_bin[pt_check[-3], pt_check[-2], pt_check[-1]] == 0) else False
+                not_in_edge = (
+                    True
+                    if (oob == 1)
+                    else (img_bin[pt_check[-3], pt_check[-2], pt_check[-1]] == 0)
+                )
         except IndexError:
             not_in_edge = True
         return not_in_edge

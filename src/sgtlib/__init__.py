@@ -22,7 +22,6 @@ of the GNU General Public License along with this program.  If not, see <https:/
         Contact email: owuordickson@gmail.com
 """
 
-
 # Project Details
 __version__ = "3.8.8"
 __install_version__ = "3.6.8"

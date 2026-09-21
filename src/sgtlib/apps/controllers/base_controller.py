@@ -4,19 +4,20 @@
 Base controller class for StructuralGT.
 """
 
-import os
 import logging
-from PySide6.QtCore import Signal, QObject
+import os
 
-from ...utils.sgt_utils import verify_path, img_to_base64
-from ...imaging.image_processor import ImageProcessor, ALLOWED_IMG_EXTENSIONS
+from PySide6.QtCore import QObject, Signal
+
 from ...compute.graph_analyzer import GraphAnalyzer
+from ...imaging.image_processor import ALLOWED_IMG_EXTENSIONS, ImageProcessor
+from ...utils.sgt_utils import img_to_base64, verify_path
+
 
 class BaseController(QObject):
-
     showAlertSignal = Signal(str, str)
 
-    def __init__(self, config_file: str = "", parent: QObject|None = None):
+    def __init__(self, config_file: str = "", parent: QObject | None = None):
         super().__init__(parent)
         # Initialize flags
         self._wait_flag = False
@@ -85,8 +86,12 @@ class BaseController(QObject):
             return None
         keys_list = list(self._sgt_objs.keys())
         if not 0 <= self._selected_sgt_obj_index < len(keys_list):
-            logging.warning("Selected image index %d is out of range for %d images.",
-                            self._selected_sgt_obj_index, len(keys_list), extra={'user': 'SGT Logs'})
+            logging.warning(
+                "Selected image index %d is out of range for %d images.",
+                self._selected_sgt_obj_index,
+                len(keys_list),
+                extra={"user": "SGT Logs"},
+            )
             return None
         return self._sgt_objs[keys_list[self._selected_sgt_obj_index]]
 
@@ -104,7 +109,9 @@ class BaseController(QObject):
         """
         try:
             # ntwk_p = self.get_selected_sgt_obj().ntwk_p
-            ntwk_p = obj.ntwk_p if (obj := self.get_selected_sgt_obj()) is not None else None
+            ntwk_p = (
+                obj.ntwk_p if (obj := self.get_selected_sgt_obj()) is not None else None
+            )
             if ntwk_p is None:
                 return ""
 
@@ -119,7 +126,9 @@ class BaseController(QObject):
             elif view == "graph":
                 images = [ntwk_p.graph_obj.img_ntwk]
             else:
-                raise ValueError("View must be 'original', 'binary', 'grayscale', 'mutated', 'graph' or 'original'")
+                raise ValueError(
+                    "View must be 'original', 'binary', 'grayscale', 'mutated', 'graph' or 'original'"
+                )
 
             if view == "graph":
                 img_cv = images[0]
@@ -140,12 +149,14 @@ class BaseController(QObject):
         Get selected images from a specific image batch.
         """
 
-        ntwk_p = obj.ntwk_p if (obj := self.get_selected_sgt_obj()) is not None else None
+        ntwk_p = (
+            obj.ntwk_p if (obj := self.get_selected_sgt_obj()) is not None else None
+        )
         if ntwk_p is None:
             return []
         return ntwk_p.selected_images
 
-    def update_sgt_obj(self, sgt_data: GraphAnalyzer|dict|None = None):
+    def update_sgt_obj(self, sgt_data: GraphAnalyzer | dict | None = None):
         """Update the SGT object at a specified index."""
         if sgt_data is None:
             return
@@ -175,27 +186,39 @@ class BaseController(QObject):
             success, result = verify_path(out_dir)
             out_dir = result if success else ""
         else:
-            logging.info(result, extra={'user': 'SGT Logs'})
+            logging.info(result, extra={"user": "SGT Logs"})
             self.showAlertSignal.emit("File Error", result)
             return False
 
         try:
             # Create an SGT object as a GraphAnalyzer object.
             file_ext = os.path.splitext(file_path)[1].lower()
-            img_extensions = tuple(ext[1:] if ext.startswith('*.') else ext for ext in ALLOWED_IMG_EXTENSIONS)
+            img_extensions = tuple(
+                ext[1:] if ext.startswith("*.") else ext
+                for ext in ALLOWED_IMG_EXTENSIONS
+            )
             if file_ext.endswith(img_extensions):
-                ntwk_p, file_name = ImageProcessor.from_image_file(file_path, out_folder=out_dir,
-                                                              config_file=self._config_file, allow_auto_scale=True)
+                ntwk_p, file_name = ImageProcessor.from_image_file(
+                    file_path,
+                    out_folder=out_dir,
+                    config_file=self._config_file,
+                    allow_auto_scale=True,
+                )
             else:
-                ntwk_p, file_name = ImageProcessor.from_graph_file(file_path, out_folder=out_dir,)
+                ntwk_p, file_name = ImageProcessor.from_graph_file(
+                    file_path,
+                    out_folder=out_dir,
+                )
             sgt_obj = GraphAnalyzer(ntwk_p)
 
             # Store the StructuralGT object and sync application
             self._sgt_objs[file_name] = sgt_obj
             return True
         except Exception as err:
-            logging.exception("File Error: %s", err, extra={'user': 'SGT Logs'})
-            self.showAlertSignal.emit("File Error", "Error processing image. Try again.")
+            logging.exception("File Error: %s", err, extra={"user": "SGT Logs"})
+            self.showAlertSignal.emit(
+                "File Error", "Error processing image. Try again."
+            )
             return False
 
     def delete_sgt_object(self, index=None) -> bool:
@@ -220,8 +243,12 @@ class BaseController(QObject):
             try:
                 os.makedirs(folder_path, exist_ok=True)
             except Exception as err:
-                logging.exception("Folder Creation Error: %s", err, extra={'user': 'SGT Logs'})
-                self.showAlertSignal.emit("Folder Creation Error", f"Error creating output folder: {err}")
+                logging.exception(
+                    "Folder Creation Error: %s", err, extra={"user": "SGT Logs"}
+                )
+                self.showAlertSignal.emit(
+                    "Folder Creation Error", f"Error creating output folder: {err}"
+                )
                 return
 
         # Update for all sgt_objs
@@ -233,9 +260,7 @@ class BaseController(QObject):
     def add_single_image(self, img_path: str, out_dir: str = "") -> bool:
         """Verify and validate an image path, use it to create an SGT object and load it in view."""
         is_created = self.create_sgt_object(img_path, out_dir)
-        if is_created:
-            return True
-        return False
+        return bool(is_created)
 
     def add_multiple_images(self, img_dir_path: str, out_dir: str = "") -> bool:
         """
@@ -245,22 +270,30 @@ class BaseController(QObject):
         if success:
             img_dir_path = result
         else:
-            logging.info(result, extra={'user': 'SGT Logs'})
+            logging.info(result, extra={"user": "SGT Logs"})
             self.showAlertSignal.emit("Directory Error", result)
             return False
 
         files = os.listdir(img_dir_path)
         files = sorted(files)
         for a_file in files:
-            allowed_extensions = tuple(ext[1:] if ext.startswith('*.') else ext for ext in ALLOWED_IMG_EXTENSIONS)
+            allowed_extensions = tuple(
+                ext[1:] if ext.startswith("*.") else ext
+                for ext in ALLOWED_IMG_EXTENSIONS
+            )
             if a_file.endswith(allowed_extensions):
                 img_path = os.path.join(str(img_dir_path), a_file)
                 _ = self.create_sgt_object(img_path, out_dir)
 
         if len(self._sgt_objs) <= 0:
-            logging.info("File Error: Files have to be either .tif .png .jpg .jpeg", extra={'user': 'SGT Logs'})
-            self.showAlertSignal.emit("File Error",
-                                      "No workable images found! Files have to be either .tif, .png, .jpg or .jpeg")
+            logging.info(
+                "File Error: Files have to be either .tif .png .jpg .jpeg",
+                extra={"user": "SGT Logs"},
+            )
+            self.showAlertSignal.emit(
+                "File Error",
+                "No workable images found! Files have to be either .tif, .png, .jpg or .jpeg",
+            )
             return False
         else:
             return True
@@ -268,6 +301,4 @@ class BaseController(QObject):
     def add_graph(self, graph_file: str, out_dir: str = "") -> bool:
         """Verify and validate the graph file path, use it to create an SGT object and load it in view."""
         is_created = self.create_sgt_object(graph_file, out_dir)
-        if is_created:
-            return True
-        return False
+        return bool(is_created)

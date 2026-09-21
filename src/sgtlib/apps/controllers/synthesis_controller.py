@@ -6,7 +6,8 @@ Pyside6 (GUI components) controller class for network synthesis.
 import os
 import sys
 from pathlib import Path
-from PySide6.QtCore import Slot, QObject, QProcess, QProcessEnvironment
+
+from PySide6.QtCore import QObject, QProcess, QProcessEnvironment, Slot
 
 from ...utils.config_loader import load_synthesis_configs
 from ...utils.sgt_utils import ProgressData, verify_path
@@ -19,25 +20,38 @@ PACKAGE_DIR = os.path.join("src", "networksynth")
 
 # -I keeps the working directory off sys.path, where the submodule folder would resolve
 # as a namespace package (spec without origin), which the check rejects.
-IMPORT_PROBE = ["-I", "-c", ("import importlib.util, sys; spec = importlib.util.find_spec('networksynth'); "
-                             "sys.exit(0 if spec is not None and spec.origin else 1)")]
+IMPORT_PROBE = [
+    "-I",
+    "-c",
+    (
+        "import importlib.util, sys; spec = importlib.util.find_spec('networksynth'); "
+        "sys.exit(0 if spec is not None and spec.origin else 1)"
+    ),
+]
 
 # Prints the requirements the interpreter lacks, read from the checkout's pyproject when
 # given one, else from the installed package. Marked entries (extras, other platforms)
 # are left alone.
-REQUIREMENTS_PROBE = ["-I", "-c", (
-    "import importlib.metadata as m, re, sys, tomllib\n"
-    "if sys.argv[1]:\n"
-    "    with open(sys.argv[1], 'rb') as f: specs = tomllib.load(f)['project']['dependencies']\n"
-    "else:\n"
-    "    specs = m.requires('networksynth') or []\n"
-    "for spec in specs:\n"
-    "    if ';' in spec: continue\n"
-    "    try: m.distribution(re.match(r'[A-Za-z0-9][A-Za-z0-9._-]*', spec).group())\n"
-    "    except m.PackageNotFoundError: print(spec)")]
+REQUIREMENTS_PROBE = [
+    "-I",
+    "-c",
+    (
+        "import importlib.metadata as m, re, sys, tomllib\n"
+        "if sys.argv[1]:\n"
+        "    with open(sys.argv[1], 'rb') as f: specs = tomllib.load(f)['project']['dependencies']\n"
+        "else:\n"
+        "    specs = m.requires('networksynth') or []\n"
+        "for spec in specs:\n"
+        "    if ';' in spec: continue\n"
+        "    try: m.distribution(re.match(r'[A-Za-z0-9][A-Za-z0-9._-]*', spec).group())\n"
+        "    except m.PackageNotFoundError: print(spec)"
+    ),
+]
 
-INSTALL_COMMAND = ('pip install "networksynth @ '
-                   'https://github.com/WilliamLuminary/NetworkSynth/archive/refs/heads/dist.zip"')
+INSTALL_COMMAND = (
+    'pip install "networksynth @ '
+    'https://github.com/WilliamLuminary/NetworkSynth/archive/refs/heads/dist.zip"'
+)
 
 DEFAULT_REPO_DIR = Path(__file__).resolve().parents[4] / "networksynth"
 
@@ -46,7 +60,12 @@ VENV_PYTHON = (Path(".venv", "bin", "python"), Path(".venv", "Scripts", "python.
 FETCH_COMMAND = "git submodule update --init --checkout networksynth"
 
 # A frozen build's point inside its own bundle, which the child cannot use.
-QT_ENV_VARS = ("QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH", "QML_IMPORT_PATH", "QML2_IMPORT_PATH")
+QT_ENV_VARS = (
+    "QT_PLUGIN_PATH",
+    "QT_QPA_PLATFORM_PLUGIN_PATH",
+    "QML_IMPORT_PATH",
+    "QML2_IMPORT_PATH",
+)
 
 STDERR_TAIL_LINES = 5
 
@@ -62,10 +81,10 @@ class SynthesisController(QObject):
     inputs in NetworkSynth's own window, and it writes its results to the folder chosen there.
     """
 
-    def __init__(self, controller_obj, parent: QObject|None = None):
+    def __init__(self, controller_obj, parent: QObject | None = None):
         super().__init__(parent)
         self._ctrl = controller_obj
-        self._process: QProcess|None = None
+        self._process: QProcess | None = None
 
         configs = load_synthesis_configs()
         self._repo_dir = configs["repo_dir"] or self._submodule_dir()
@@ -112,7 +131,9 @@ class SynthesisController(QObject):
     def _missing_requirements(self) -> list[str]:
         """NetworkSynth's requirements the interpreter lacks, as pip specs. An installed
         package declares them itself; a checkout's are read from its pyproject."""
-        pyproject = "" if self._installed else os.path.join(self._repo_dir, "pyproject.toml")
+        pyproject = (
+            "" if self._installed else os.path.join(self._repo_dir, "pyproject.toml")
+        )
         if pyproject and not os.path.isfile(pyproject):
             return []
         probe = QProcess()
@@ -130,9 +151,11 @@ class SynthesisController(QObject):
     def unavailable_reason(self) -> str:
         """Why synthesis cannot run at all, or an empty string. Cheap: no interpreter is asked."""
         if self._interpreter == "":
-            return ("This build has no interpreter to run NetworkSynth with. Name one with "
-                    "'python_interpreter' under [synthesis-settings] in the config file, or "
-                    f"make a virtual environment in {os.path.join(self._repo_dir or str(DEFAULT_REPO_DIR), '.venv')}.")
+            return (
+                "This build has no interpreter to run NetworkSynth with. Name one with "
+                "'python_interpreter' under [synthesis-settings] in the config file, or "
+                f"make a virtual environment in {os.path.join(self._repo_dir or str(DEFAULT_REPO_DIR), '.venv')}."
+            )
         if not verify_path(self._interpreter)[0]:
             return f"No Python interpreter at {self._interpreter}."
         return ""
@@ -146,20 +169,26 @@ class SynthesisController(QObject):
         self._installed = self._is_installed()
         if not self._installed:
             if self._repo_dir == "":
-                return (f"{self._interpreter} cannot import networksynth, and there is no "
-                        f"checkout in {DEFAULT_REPO_DIR}. Install it with '{INSTALL_COMMAND}', "
-                        f"fetch the checkout with '{FETCH_COMMAND}', or name where it already "
-                        "is with 'repo_dir' under [synthesis-settings] in the config file.")
+                return (
+                    f"{self._interpreter} cannot import networksynth, and there is no "
+                    f"checkout in {DEFAULT_REPO_DIR}. Install it with '{INSTALL_COMMAND}', "
+                    f"fetch the checkout with '{FETCH_COMMAND}', or name where it already "
+                    "is with 'repo_dir' under [synthesis-settings] in the config file."
+                )
             if not verify_path(self.package_dir)[0]:
                 if self._repo_dir == str(DEFAULT_REPO_DIR):
-                    return (f"{DEFAULT_REPO_DIR} holds no {PACKAGE_DIR}. Fetch NetworkSynth "
-                            f"with '{FETCH_COMMAND}', or install it with '{INSTALL_COMMAND}'.")
+                    return (
+                        f"{DEFAULT_REPO_DIR} holds no {PACKAGE_DIR}. Fetch NetworkSynth "
+                        f"with '{FETCH_COMMAND}', or install it with '{INSTALL_COMMAND}'."
+                    )
                 return f"No {PACKAGE_DIR} in {self._repo_dir}."
         missing = self._missing_requirements()
         if missing:
             specs = " ".join(f'"{spec}"' for spec in missing)
-            return ("NetworkSynth needs packages this environment lacks. Install them with "
-                    f"'{self._interpreter} -m pip install {specs}'.")
+            return (
+                "NetworkSynth needs packages this environment lacks. Install them with "
+                f"'{self._interpreter} -m pip install {specs}'."
+            )
         return ""
 
     @Slot(result=bool)
@@ -170,7 +199,11 @@ class SynthesisController(QObject):
     @Slot(result=str)
     def tooltip_text(self) -> str:
         reason = self.unavailable_reason()
-        return "Generate synthetic networks" if reason == "" else f"Synthesis unavailable: {reason}"
+        return (
+            "Generate synthetic networks"
+            if reason == ""
+            else f"Synthesis unavailable: {reason}"
+        )
 
     def _extracted_graph(self):
         """The graph currently in view, or None if nothing has been extracted yet."""
@@ -213,8 +246,13 @@ class SynthesisController(QObject):
             self._ctrl.showAlertSignal.emit("Synthesis Unavailable", reason)
             return
 
-        if self._process is not None and self._process.state() != QProcess.ProcessState.NotRunning:
-            self._ctrl.showAlertSignal.emit("Synthesis Running", "The synthesis window is already open.")
+        if (
+            self._process is not None
+            and self._process.state() != QProcess.ProcessState.NotRunning
+        ):
+            self._ctrl.showAlertSignal.emit(
+                "Synthesis Running", "The synthesis window is already open."
+            )
             return
 
         env = QProcessEnvironment.systemEnvironment()
@@ -223,7 +261,10 @@ class SynthesisController(QObject):
         if not self._installed:
             source_root = os.path.join(self._repo_dir, "src")
             existing = env.value("PYTHONPATH")
-            env.insert("PYTHONPATH", f"{source_root}{os.pathsep}{existing}" if existing else source_root)
+            env.insert(
+                "PYTHONPATH",
+                f"{source_root}{os.pathsep}{existing}" if existing else source_root,
+            )
 
         graph, image = self._extracted_graph()
         arguments = ["-m", ENTRY_MODULE]
@@ -256,8 +297,12 @@ class SynthesisController(QObject):
             self._report("info", "Synthesis window closed.")
             return
 
-        error_output = bytes(self._process.readAllStandardError()).decode(errors="replace")
-        tail = [line for line in error_output.splitlines() if line.strip()][-STDERR_TAIL_LINES:]
+        error_output = bytes(self._process.readAllStandardError()).decode(
+            errors="replace"
+        )
+        tail = [line for line in error_output.splitlines() if line.strip()][
+            -STDERR_TAIL_LINES:
+        ]
         detail = "\n".join(tail) if tail else "no output"
         self._report("error", f"Synthesis exited with code {exit_code}:\n{detail}")
 
@@ -270,4 +315,6 @@ class SynthesisController(QObject):
         self._ctrl.showAlertSignal.emit("Synthesis Error", message)
 
     def _report(self, msg_type: str, message: str) -> None:
-        self._ctrl.handle_progress_update(ProgressData(type=msg_type, sender="GT", message=message))
+        self._ctrl.handle_progress_update(
+            ProgressData(type=msg_type, sender="GT", message=message)
+        )

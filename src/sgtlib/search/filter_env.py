@@ -5,11 +5,13 @@ A class for building an image filter search space for graph generation.
 
 import copy
 import random
-import numpy as np
 from dataclasses import dataclass
+
+import numpy as np
+
 from ..imaging.base_image import BaseImage
-from ..utils.sgt_utils import AbortException
 from ..utils.config_loader import load_img_configs
+from ..utils.sgt_utils import AbortException
 
 
 class FilterSearchSpace:
@@ -33,6 +35,7 @@ class FilterSearchSpace:
     class Candidate:
         """A candidate in the search space. It contains a position in the search space and, the Standard Deviation (SD)
         of the pixel values."""
+
         position: int | None = None
         cost: float | None = None
 
@@ -41,12 +44,17 @@ class FilterSearchSpace:
         """Discrete search space of image filters; where, each candidate is a combination of image filter
         configurations. We use this template to build 3 search spaces: apply filters, value filters, and brightness
         filters."""
+
         min_pos: int = 0
         max_pos: int = 0
-        candidates: list["FilterSearchSpace.FilterCandidate|FilterSearchSpace.Candidate|None"] = None
+        candidates: list[
+            FilterSearchSpace.FilterCandidate | FilterSearchSpace.Candidate | None
+        ] = None
         ignore_candidates: set = None
         loser_candidates: set = None
-        best_candidate: "FilterSearchSpace.FilterCandidate|FilterSearchSpace.Candidate|None" = None
+        best_candidate: (
+            FilterSearchSpace.FilterCandidate | FilterSearchSpace.Candidate | None
+        ) = None
 
     @dataclass
     class FilterCandidate:
@@ -56,12 +64,15 @@ class FilterSearchSpace:
         evaluating the binary image and finding the number of white pixels in the image. Retrieve the corresponding pixel
         values from the original image and calculate the Standard Deviation (SD) of the pixel values. Finally, it has
         the combination of image filter configurations."""
-        position: int | None = None                  # 11 bits long (approx. 2k candidates)
+
+        position: int | None = None  # 11 bits long (approx. 2k candidates)
         cost: float | None = None
-        value_range: tuple[int, int] | None = None                      # [min, max] values -- 0bits-20bits
-        value_space: "FilterSearchSpace.SearchSpace" = None                      # approx. 1B candidates
-        brightness_space: "FilterSearchSpace.SearchSpace" = None                 # approx. 256 candidates
-        graph_accuracy: float | None = None          # CNN model prediction accuracy of the generated graph
+        value_range: tuple[int, int] | None = None  # [min, max] values -- 0bits-20bits
+        value_space: FilterSearchSpace.SearchSpace = None  # approx. 1B candidates
+        brightness_space: FilterSearchSpace.SearchSpace = None  # approx. 256 candidates
+        graph_accuracy: float | None = (
+            None  # CNN model prediction accuracy of the generated graph
+        )
         img_configs: dict | None = None
 
     def __init__(self):
@@ -93,7 +104,9 @@ class FilterSearchSpace:
         # Initialize search space
         pos = 0
         init_configs = copy.deepcopy(img_obj.configs)
-        search_space = FilterSearchSpace.SearchSpace(candidates=[], ignore_candidates=set())
+        search_space = FilterSearchSpace.SearchSpace(
+            candidates=[], ignore_candidates=set()
+        )
 
         for tt in threshold_types:
             global_range = global_thresh_range if tt == 0 else [128]
@@ -106,43 +119,97 @@ class FilterSearchSpace:
                                 for blur_size in blurring_window_sizes:
                                     for filter_size in filter_window_sizes:
                                         init_configs["threshold_type"]["value"] = tt
-                                        init_configs["global_threshold_value"]["value"] = global_thresh
-                                        init_configs["adaptive_local_threshold_value"]["value"] = adaptive_thresh
-                                        init_configs["brightness_level"]["value"] = brightness
-                                        init_configs["contrast_level"]["value"] = contrast
-                                        init_configs["apply_gamma"]["dataValue"] = gamma_val
-                                        init_configs["apply_autolevel"]["dataValue"] = blur_size
-                                        init_configs["apply_gaussian_blur"]["dataValue"] = blur_size
-                                        init_configs["apply_lowpass_filter"]["dataValue"] = filter_size
-                                        init_configs["apply_laplacian_gradient"]["dataValue"] = blur_size
-                                        init_configs["apply_sobel_gradient"]["dataValue"] = blur_size
+                                        init_configs["global_threshold_value"][
+                                            "value"
+                                        ] = global_thresh
+                                        init_configs["adaptive_local_threshold_value"][
+                                            "value"
+                                        ] = adaptive_thresh
+                                        init_configs["brightness_level"]["value"] = (
+                                            brightness
+                                        )
+                                        init_configs["contrast_level"]["value"] = (
+                                            contrast
+                                        )
+                                        init_configs["apply_gamma"]["dataValue"] = (
+                                            gamma_val
+                                        )
+                                        init_configs["apply_autolevel"]["dataValue"] = (
+                                            blur_size
+                                        )
+                                        init_configs["apply_gaussian_blur"][
+                                            "dataValue"
+                                        ] = blur_size
+                                        init_configs["apply_lowpass_filter"][
+                                            "dataValue"
+                                        ] = filter_size
+                                        init_configs["apply_laplacian_gradient"][
+                                            "dataValue"
+                                        ] = blur_size
+                                        init_configs["apply_sobel_gradient"][
+                                            "dataValue"
+                                        ] = blur_size
                                         for apply_dark_fg in [0, 1]:
                                             for apply_gamma in [0, 1]:
                                                 for apply_auto_lvl in [0, 1]:
                                                     for apply_laplacian in [0, 1]:
                                                         for apply_gaussian in [0, 1]:
                                                             for apply_lowpass in [0, 1]:
-                                                                for apply_sobel in [0, 1]:
-                                                                    for apply_median in [0, 1]:
-                                                                        for apply_scharr in [0, 1]:
-                                                                            init_configs["apply_dark_foreground"][
-                                                                                "value"] = apply_dark_fg
-                                                                            init_configs["apply_gamma"][
-                                                                                "value"] = apply_gamma
-                                                                            init_configs["apply_autolevel"][
-                                                                                "value"] = apply_auto_lvl
-                                                                            init_configs["apply_laplacian_gradient"][
-                                                                                "value"] = apply_laplacian
-                                                                            init_configs["apply_gaussian_blur"][
-                                                                                "value"] = apply_gaussian
-                                                                            init_configs["apply_lowpass_filter"][
-                                                                                "value"] = apply_lowpass
-                                                                            init_configs["apply_sobel_gradient"][
-                                                                                "value"] = apply_sobel
-                                                                            init_configs["apply_median_filter"][
-                                                                                "value"] = apply_median
-                                                                            init_configs["apply_scharr_gradient"][
-                                                                                "value"] = apply_scharr
+                                                                for apply_sobel in [
+                                                                    0,
+                                                                    1,
+                                                                ]:
+                                                                    for (
+                                                                        apply_median
+                                                                    ) in [0, 1]:
+                                                                        for (
+                                                                            apply_scharr
+                                                                        ) in [0, 1]:
+                                                                            init_configs[
+                                                                                "apply_dark_foreground"
+                                                                            ][
+                                                                                "value"
+                                                                            ] = apply_dark_fg
+                                                                            init_configs[
+                                                                                "apply_gamma"
+                                                                            ][
+                                                                                "value"
+                                                                            ] = apply_gamma
+                                                                            init_configs[
+                                                                                "apply_autolevel"
+                                                                            ][
+                                                                                "value"
+                                                                            ] = apply_auto_lvl
+                                                                            init_configs[
+                                                                                "apply_laplacian_gradient"
+                                                                            ][
+                                                                                "value"
+                                                                            ] = apply_laplacian
+                                                                            init_configs[
+                                                                                "apply_gaussian_blur"
+                                                                            ][
+                                                                                "value"
+                                                                            ] = apply_gaussian
+                                                                            init_configs[
+                                                                                "apply_lowpass_filter"
+                                                                            ][
+                                                                                "value"
+                                                                            ] = apply_lowpass
+                                                                            init_configs[
+                                                                                "apply_sobel_gradient"
+                                                                            ][
+                                                                                "value"
+                                                                            ] = apply_sobel
+                                                                            init_configs[
+                                                                                "apply_median_filter"
+                                                                            ][
+                                                                                "value"
+                                                                            ] = apply_median
+                                                                            init_configs[
+                                                                                "apply_scharr_gradient"
+                                                                            ][
+                                                                                "value"
+                                                                            ] = apply_scharr
                                                                             # candidate = FilterSearchSpace.Candidate(
                                                                             #     position=pos,
                                                                             #     cost=None,
@@ -150,28 +217,33 @@ class FilterSearchSpace:
                                                                             # )
                                                                             # search_space.candidates.append(candidate)
                                                                             print(
-                                                                                f"Candidate {pos} added to search space.")
+                                                                                f"Candidate {pos} added to search space."
+                                                                            )
                                                                             pos += 1
         return search_space
 
     @staticmethod
-    def get_initial_candidate(search_space: "FilterSearchSpace.SearchSpace") -> "FilterSearchSpace.FilterCandidate|FilterSearchSpace.Candidate|None":
+    def get_initial_candidate(
+        search_space: FilterSearchSpace.SearchSpace,
+    ) -> FilterSearchSpace.FilterCandidate | FilterSearchSpace.Candidate | None:
         """
         Get the initial candidate.
 
         :param search_space: The search space.
         """
         idx = random.randint(0, len(search_space.candidates) - 1)
-        if search_space.best_candidate is None:
-            init_candidate = search_space.candidates[idx]
-        elif search_space.best_candidate.position in search_space.ignore_candidates or search_space.best_candidate.position in search_space.loser_candidates:
+        if (
+            search_space.best_candidate is None
+            or search_space.best_candidate.position in search_space.ignore_candidates
+            or search_space.best_candidate.position in search_space.loser_candidates
+        ):
             init_candidate = search_space.candidates[idx]
         else:
             init_candidate = search_space.best_candidate
         return init_candidate
 
     @staticmethod
-    def encode_filter_selections(img_configs: dict|None) -> int:
+    def encode_filter_selections(img_configs: dict | None) -> int:
         """
         Encode the image filter configurations into a position in the search space.
 
@@ -192,16 +264,18 @@ class FilterSearchSpace:
         apply_median_filter = img_configs["apply_median_filter"]["value"]
         apply_scharr_gradient = img_configs["apply_scharr_gradient"]["value"]
 
-        bitstring = (format(threshold_type, "02b") +
-                     format(apply_dark_fg, "01b") +
-                     format(apply_gamma, "01b") +
-                     format(apply_autolevel, "01b") +
-                     format(apply_laplacian_gradient, "01b") +
-                     format(apply_gaussian_blur, "01b") +
-                     format(apply_lowpass_filter, "01b") +
-                     format(apply_sobel_gradient, "01b") +
-                     format(apply_median_filter, "01b") +
-                     format(apply_scharr_gradient, "01b"))
+        bitstring = (
+            format(threshold_type, "02b")
+            + format(apply_dark_fg, "01b")
+            + format(apply_gamma, "01b")
+            + format(apply_autolevel, "01b")
+            + format(apply_laplacian_gradient, "01b")
+            + format(apply_gaussian_blur, "01b")
+            + format(apply_lowpass_filter, "01b")
+            + format(apply_sobel_gradient, "01b")
+            + format(apply_median_filter, "01b")
+            + format(apply_scharr_gradient, "01b")
+        )
 
         return int(bitstring, 2)
 
@@ -216,7 +290,7 @@ class FilterSearchSpace:
 
         try:
             encoded_pos = int(encoded_pos)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             raise TypeError("Value must be convertible to an integer")
 
         if not (0 <= encoded_pos < 2048):
@@ -254,7 +328,11 @@ class FilterSearchSpace:
         return img_configs
 
     @staticmethod
-    def decode_filter_values(img_configs: dict|None, value_candidate: "FilterSearchSpace.Candidate|None"=None, bright_candidate: "FilterSearchSpace.Candidate|None"=None) -> dict|None:
+    def decode_filter_values(
+        img_configs: dict | None,
+        value_candidate: FilterSearchSpace.Candidate | None = None,
+        bright_candidate: FilterSearchSpace.Candidate | None = None,
+    ) -> dict | None:
         """
         Decode the image filter configurations of a candidate into a dictionary.
 
@@ -285,27 +363,41 @@ class FilterSearchSpace:
 
             if new_img_configs["threshold_type"]["value"] == 1:
                 # Should be an Odd number
-                threshold_val = threshold_val+1 if threshold_val%2==0 else threshold_val
-                new_img_configs["adaptive_local_threshold_value"]["value"] = threshold_val
+                threshold_val = (
+                    threshold_val + 1 if threshold_val % 2 == 0 else threshold_val
+                )
+                new_img_configs["adaptive_local_threshold_value"]["value"] = (
+                    threshold_val
+                )
 
             if new_img_configs["apply_gamma"]["value"] == 1:
-                new_img_configs["apply_gamma"]["dataValue"] = round(gamma_val / 100.0, 2) if gamma_val > 0 else 0.01
+                new_img_configs["apply_gamma"]["dataValue"] = (
+                    round(gamma_val / 100.0, 2) if gamma_val > 0 else 0.01
+                )
 
             if new_img_configs["apply_lowpass_filter"]["value"] == 1:
                 new_img_configs["apply_lowpass_filter"]["dataValue"] = lowpass_val
 
             if new_img_configs["apply_autolevel"]["value"] == 1:
-                new_img_configs["apply_autolevel"]["dataValue"] = blur_window_size[autolevel_val]
+                new_img_configs["apply_autolevel"]["dataValue"] = blur_window_size[
+                    autolevel_val
+                ]
 
             if new_img_configs["apply_gaussian_blur"]["value"] == 1:
-                new_img_configs["apply_gaussian_blur"]["dataValue"] = blur_window_size[gaussian_val]
+                new_img_configs["apply_gaussian_blur"]["dataValue"] = blur_window_size[
+                    gaussian_val
+                ]
 
             if new_img_configs["apply_laplacian_gradient"]["value"] == 1:
-                new_img_configs["apply_laplacian_gradient"]["dataValue"] = blur_window_size[laplacian_val]
+                new_img_configs["apply_laplacian_gradient"]["dataValue"] = (
+                    blur_window_size[laplacian_val]
+                )
 
             if new_img_configs["apply_sobel_gradient"]["value"] == 1:
                 # To Be Updated (we need to keep bit_str less than 30 bits)
-                new_img_configs["apply_sobel_gradient"]["dataValue"] = blur_window_size[laplacian_val] # re-use laplacian gradient
+                new_img_configs["apply_sobel_gradient"]["dataValue"] = blur_window_size[
+                    laplacian_val
+                ]  # re-use laplacian gradient
 
         if bright_candidate is not None:
             encoded_brightness_pos = bright_candidate.position
@@ -327,7 +419,9 @@ class FilterSearchSpace:
         return new_img_configs
 
     @staticmethod
-    def build_search_space(default_img_configs: dict, initial_pop: int = 256) -> SearchSpace | None:
+    def build_search_space(
+        default_img_configs: dict, initial_pop: int = 256
+    ) -> SearchSpace | None:
         """
         Create a discrete search space where each candidate is a combination of image filter configurations.
         Encodes a combination of image filter configurations as a binary number, then this number is converted into an
@@ -347,17 +441,47 @@ class FilterSearchSpace:
         bri_range = (0, 2**16)
 
         # Initialize search space
-        initial_position = FilterSearchSpace.encode_filter_selections(default_img_configs)
+        initial_position = FilterSearchSpace.encode_filter_selections(
+            default_img_configs
+        )
         initial_position = initial_position if (0 <= initial_position < 2048) else 128
-        search_space = FilterSearchSpace.SearchSpace(candidates=[], ignore_candidates=set(), loser_candidates=set(), min_pos=0, max_pos=apply_pop-1)
+        search_space = FilterSearchSpace.SearchSpace(
+            candidates=[],
+            ignore_candidates=set(),
+            loser_candidates=set(),
+            min_pos=0,
+            max_pos=apply_pop - 1,
+        )
         for pos in range(apply_pop):
             img_configs = FilterSearchSpace.decode_filter_selections(pos)
             if img_configs is not None:
                 # Create an empty candidate
-                val_pop = [FilterSearchSpace.Candidate(position=random.randrange(val_range[0], val_range[1]), cost=None) for _ in range(initial_pop)]
-                b_pop = [FilterSearchSpace.Candidate(position=random.randrange(bri_range[0], bri_range[1]), cost=None) for _ in range(initial_pop)]
-                value_space = FilterSearchSpace.SearchSpace(candidates=val_pop, ignore_candidates=set(), loser_candidates=set(), min_pos=val_range[0], max_pos=val_range[1])
-                brightness_space = FilterSearchSpace.SearchSpace(candidates=b_pop, ignore_candidates=set(), loser_candidates=set(), min_pos=bri_range[0], max_pos=bri_range[1])
+                val_pop = [
+                    FilterSearchSpace.Candidate(
+                        position=random.randrange(val_range[0], val_range[1]), cost=None
+                    )
+                    for _ in range(initial_pop)
+                ]
+                b_pop = [
+                    FilterSearchSpace.Candidate(
+                        position=random.randrange(bri_range[0], bri_range[1]), cost=None
+                    )
+                    for _ in range(initial_pop)
+                ]
+                value_space = FilterSearchSpace.SearchSpace(
+                    candidates=val_pop,
+                    ignore_candidates=set(),
+                    loser_candidates=set(),
+                    min_pos=val_range[0],
+                    max_pos=val_range[1],
+                )
+                brightness_space = FilterSearchSpace.SearchSpace(
+                    candidates=b_pop,
+                    ignore_candidates=set(),
+                    loser_candidates=set(),
+                    min_pos=bri_range[0],
+                    max_pos=bri_range[1],
+                )
 
                 if pos == initial_position:
                     search_space.best_candidate = FilterSearchSpace.FilterCandidate(
@@ -383,7 +507,7 @@ class FilterSearchSpace:
         return search_space
 
     @staticmethod
-    def cost_function(img_configs: dict|None, img_2d: np.ndarray|None) -> float:
+    def cost_function(img_configs: dict | None, img_2d: np.ndarray | None) -> float:
         """Calculate and apply the cost of a candidate. Given the image filter configurations, apply them to get a
         binary image and compute the histogram of the binary image. Then, compute the cost of the candidate based on the
         histogram statistics.
@@ -423,7 +547,9 @@ class FilterSearchSpace:
             # Add cost to the selected threshold type
             total_filter_cost += img_configs["threshold_type"]["value"]
             if img_configs["threshold_type"]["value"] == 0:
-                total_filter_cost += abs(img_configs["global_threshold_value"]["value"] - 128)
+                total_filter_cost += abs(
+                    img_configs["global_threshold_value"]["value"] - 128
+                )
 
             # 3. Add cost to brightness and contrast
             if img_configs["brightness_level"]["value"] != 0:
@@ -459,7 +585,7 @@ class FilterSearchSpace:
             num_filters = compute_num_filters()
             thinning_cost = img_obj.evaluate_img_binary()
 
-            eval_cost = (w1*num_filters) + (w2*thinning_cost) + density_cost
+            eval_cost = (w1 * num_filters) + (w2 * thinning_cost) + density_cost
             # print(f"Filter-Fxn (cost) -> Filter: {thinning_cost}, Cost: {eval_cost} ")
         except Exception as e:
             print(f"Filter-Fxn (cost) -> Error in cost function: {e}")
@@ -468,8 +594,16 @@ class FilterSearchSpace:
         return eval_cost
 
 
-
-def sgt_genetic_algorithm(s_space: FilterSearchSpace.SearchSpace, img_data: np.ndarray|None, img_configs: dict|None, generations: int = 4, pop_size: int = 8, gamma: float = 1.0, mu: float = 0.9, sigma: float = 0.9) -> dict|None:
+def sgt_genetic_algorithm(
+    s_space: FilterSearchSpace.SearchSpace,
+    img_data: np.ndarray | None,
+    img_configs: dict | None,
+    generations: int = 4,
+    pop_size: int = 8,
+    gamma: float = 1.0,
+    mu: float = 0.9,
+    sigma: float = 0.9,
+) -> dict | None:
     """
     Executes the genetic algorithm to find the best candidate from a huge search space.
 
@@ -491,7 +625,7 @@ def sgt_genetic_algorithm(s_space: FilterSearchSpace.SearchSpace, img_data: np.n
         # Select a random parent population (1/3 of the population)
         q = np.random.permutation(pop_size)
         parent_pop = []
-        for i in range(p_size if (p_size := pop_size//3) > 1 else 2):
+        for i in range(p_size if (p_size := pop_size // 3) > 1 else 2):
             parent_pop.append(s_space.candidates[q[i]])
         return parent_pop
 
@@ -504,8 +638,18 @@ def sgt_genetic_algorithm(s_space: FilterSearchSpace.SearchSpace, img_data: np.n
             # Apply crossover and ensure positions are within bounds
             pos_1: float = parent_1.position if parent_1.position is not None else 0
             pos_2: float = parent_2.position if parent_2.position is not None else 0
-            child_1.position = int(max(s_space.min_pos, min(pos_1 * alpha + pos_2 * (1 - alpha), s_space.max_pos)))
-            child_2.position = int(max(s_space.min_pos, min(pos_2 * alpha + pos_1 * (1 - alpha), s_space.max_pos)))
+            child_1.position = int(
+                max(
+                    s_space.min_pos,
+                    min(pos_1 * alpha + pos_2 * (1 - alpha), s_space.max_pos),
+                )
+            )
+            child_2.position = int(
+                max(
+                    s_space.min_pos,
+                    min(pos_2 * alpha + pos_1 * (1 - alpha), s_space.max_pos),
+                )
+            )
             return child_1, child_2
         else:
             return parent_1, parent_2
@@ -518,7 +662,9 @@ def sgt_genetic_algorithm(s_space: FilterSearchSpace.SearchSpace, img_data: np.n
             mutation_value = np.random.normal(mu, sigma)
             # Mutate the position and ensure it stays within bounds
             x_pos = x.position if x.position is not None else 0
-            y.position = int(np.clip(x_pos + mutation_value, s_space.min_pos, s_space.max_pos))
+            y.position = int(
+                np.clip(x_pos + mutation_value, s_space.min_pos, s_space.max_pos)
+            )
             return y
         else:
             return x
@@ -526,10 +672,14 @@ def sgt_genetic_algorithm(s_space: FilterSearchSpace.SearchSpace, img_data: np.n
     def _compute_fitness(sol):
         """Compute fitness for an individual."""
         if isinstance(sol, FilterSearchSpace.Candidate):
-            if s_space.max_pos >= 2 ** 30:
-                new_img_configs = FilterSearchSpace.decode_filter_values(img_configs, value_candidate=sol)
+            if s_space.max_pos >= 2**30:
+                new_img_configs = FilterSearchSpace.decode_filter_values(
+                    img_configs, value_candidate=sol
+                )
             else:
-                new_img_configs = FilterSearchSpace.decode_filter_values(img_configs, bright_candidate=sol)
+                new_img_configs = FilterSearchSpace.decode_filter_values(
+                    img_configs, bright_candidate=sol
+                )
             fitness_cost = FilterSearchSpace.cost_function(new_img_configs, img_data)
         else:
             fitness_cost, new_img_configs = np.inf, None
@@ -544,7 +694,9 @@ def sgt_genetic_algorithm(s_space: FilterSearchSpace.SearchSpace, img_data: np.n
     # Initialize best candidate
     best_sol = FilterSearchSpace.get_initial_candidate(s_space)
     best_sol.cost, best_configs = _compute_fitness(best_sol)
-    print(f"GA-Alg (initial) -> position: {best_sol.position if best_sol is not None else None}, cost: {best_sol.cost if best_sol is not None else None}")
+    print(
+        f"GA-Alg (initial) -> position: {best_sol.position if best_sol is not None else None}, cost: {best_sol.cost if best_sol is not None else None}"
+    )
     for _ in range(generations):
         best_individual = None
         temp_configs = None
@@ -558,14 +710,23 @@ def sgt_genetic_algorithm(s_space: FilterSearchSpace.SearchSpace, img_data: np.n
                     s_space.loser_candidates.add(individual.position)
                     continue
 
-                individual_cost = individual.cost if individual.cost is not None else np.inf
+                individual_cost = (
+                    individual.cost if individual.cost is not None else np.inf
+                )
                 if best_individual is None:
-                    print(f"GA-Alg (winner) -> position: {individual.position}, cost: {individual.cost}")
+                    print(
+                        f"GA-Alg (winner) -> position: {individual.position}, cost: {individual.cost}"
+                    )
                     best_individual = copy.deepcopy(individual)
                     temp_configs = copy.deepcopy(new_configs)
 
-                if best_individual.cost is None or individual_cost < best_individual.cost:
-                    print(f"GA-Alg (winner) -> position: {individual.position}, cost: {individual.cost}")
+                if (
+                    best_individual.cost is None
+                    or individual_cost < best_individual.cost
+                ):
+                    print(
+                        f"GA-Alg (winner) -> position: {individual.position}, cost: {individual.cost}"
+                    )
                     best_individual = copy.deepcopy(individual)
                     temp_configs = copy.deepcopy(new_configs)
 
@@ -599,13 +760,19 @@ def sgt_genetic_algorithm(s_space: FilterSearchSpace.SearchSpace, img_data: np.n
             x_2 = _mutate(c_2)
 
             # 3.3. Add children to the new population
-            new_population.append(x_1) if (x_1.position not in s_space.ignore_candidates) or (x_1.position not in s_space.loser_candidates) else None
-            new_population.append(x_2) if (x_2.position not in s_space.ignore_candidates) or (x_2.position not in s_space.loser_candidates)  else None
+            new_population.append(x_1) if (
+                x_1.position not in s_space.ignore_candidates
+            ) or (x_1.position not in s_space.loser_candidates) else None
+            new_population.append(x_2) if (
+                x_2.position not in s_space.ignore_candidates
+            ) or (x_2.position not in s_space.loser_candidates) else None
         # 4. Apply replacement/elitism if desired
         s_space.candidates = new_population
 
     # Get the best candidate from past searches if best_sol.cost is np.inf
-    print(f"GA-Alg (best) -> position: {best_sol.position if best_sol is not None else None}, cost: {best_sol.cost if best_sol is not None else None}\n")
+    print(
+        f"GA-Alg (best) -> position: {best_sol.position if best_sol is not None else None}, cost: {best_sol.cost if best_sol is not None else None}\n"
+    )
     best_sol_cost = best_sol.cost if best_sol is not None else np.inf
     if best_sol_cost == np.inf and len(s_space.ignore_candidates) > 0:
         prev_best_position = min(s_space.ignore_candidates)
@@ -617,8 +784,12 @@ def sgt_genetic_algorithm(s_space: FilterSearchSpace.SearchSpace, img_data: np.n
     return best_configs
 
 
-
-def sgt_hill_climbing_algorithm(s_space: FilterSearchSpace.SearchSpace|None, img_data: np.ndarray|None, max_iters: int = 5, step_size: int = 1) -> None:
+def sgt_hill_climbing_algorithm(
+    s_space: FilterSearchSpace.SearchSpace | None,
+    img_data: np.ndarray | None,
+    max_iters: int = 5,
+    step_size: int = 1,
+) -> None:
     """
     Executes the hill climbing algorithm to find the best candidate from a small search space.
 
@@ -633,14 +804,16 @@ def sgt_hill_climbing_algorithm(s_space: FilterSearchSpace.SearchSpace|None, img
     if s_space is None or img_data is None:
         raise AbortException("Search space or ImageObject cannot be None")
 
-    def _generate_neighbors(iter_val: int) -> list[FilterSearchSpace.Candidate|FilterSearchSpace.FilterCandidate]:
+    def _generate_neighbors(
+        iter_val: int,
+    ) -> list[FilterSearchSpace.Candidate | FilterSearchSpace.FilterCandidate]:
         """Generate neighbors by slightly modifying the current candidate."""
         lst_neighbor = []
         if s_space is None:
             return lst_neighbor
 
         for i in range(20):
-            conf_val = float(random.randint(0, 100)/100)
+            conf_val = float(random.randint(0, 100) / 100)
             if conf_val >= 0.95:
                 # with random probability, move the center position to a random position in the search space
                 center_pos = random.randint(s_space.min_pos, s_space.max_pos)
@@ -650,11 +823,17 @@ def sgt_hill_climbing_algorithm(s_space: FilterSearchSpace.SearchSpace|None, img
             center_pos: int = 0 if center_pos is None else center_pos
             left_pos = max(s_space.min_pos, center_pos - step_size - i - iter_val)
             right_pos = min(s_space.max_pos, center_pos + step_size + i + iter_val)
-            if isinstance(best_sol, (FilterSearchSpace.Candidate, FilterSearchSpace.FilterCandidate)):
+            if isinstance(
+                best_sol,
+                (FilterSearchSpace.Candidate, FilterSearchSpace.FilterCandidate),
+            ):
                 for item in s_space.candidates:
                     item_pos = item.position if item is not None else 0
                     item_pos: int = 0 if item_pos is None else item_pos
-                    if (item_pos in (left_pos, center_pos, right_pos)) and ((item_pos not in s_space.ignore_candidates) or (item_pos not in s_space.loser_candidates)):
+                    if (item_pos in (left_pos, center_pos, right_pos)) and (
+                        (item_pos not in s_space.ignore_candidates)
+                        or (item_pos not in s_space.loser_candidates)
+                    ):
                         lst_neighbor.append(item)
         return lst_neighbor
 
@@ -674,7 +853,9 @@ def sgt_hill_climbing_algorithm(s_space: FilterSearchSpace.SearchSpace|None, img
     # 1b. Reset image configs to default values
     # best_sol.img_configs = FilterSearchSpace.decode_filter_selections(best_sol.position)
     best_sol.cost = _compute_fitness(best_sol)
-    print(f"HC-Alg (initial) -> position: {best_sol.position if best_sol is not None else None}, cost: {best_sol.cost if best_sol is not None else None}")
+    print(
+        f"HC-Alg (initial) -> position: {best_sol.position if best_sol is not None else None}, cost: {best_sol.cost if best_sol is not None else None}"
+    )
     # 2. Run the hill climbing algorithm
     for it in range(max_iters):
         # Get neighbors to the current best candidate
@@ -691,10 +872,14 @@ def sgt_hill_climbing_algorithm(s_space: FilterSearchSpace.SearchSpace|None, img
 
             neighbor_cost = neighbor.cost if neighbor.cost is not None else np.inf
             if best_neighbor is None:
-                print(f"HC-Alg (winner) -> position: {neighbor.position}, cost: {neighbor.cost}")
+                print(
+                    f"HC-Alg (winner) -> position: {neighbor.position}, cost: {neighbor.cost}"
+                )
                 best_neighbor = copy.deepcopy(neighbor)
             if best_neighbor.cost is None or neighbor_cost < best_neighbor.cost:
-                print(f"HC-Alg (winner) -> position: {neighbor.position}, cost: {neighbor.cost}")
+                print(
+                    f"HC-Alg (winner) -> position: {neighbor.position}, cost: {neighbor.cost}"
+                )
                 best_neighbor = copy.deepcopy(neighbor)
 
         # Update the current best candidate
@@ -706,14 +891,18 @@ def sgt_hill_climbing_algorithm(s_space: FilterSearchSpace.SearchSpace|None, img
 
         best_sol_cost = best_sol.cost if best_sol is not None else np.inf
         if best_neighbor.cost < best_sol_cost:
-            print(f"HC-Alg (new best) -> position: {best_neighbor.position}, cost: {best_neighbor.cost}")
+            print(
+                f"HC-Alg (new best) -> position: {best_neighbor.position}, cost: {best_neighbor.cost}"
+            )
             best_sol = copy.deepcopy(best_neighbor)
         else:
             # No improvement found, reached a local optimum
             break
 
     # Get the best candidate from past searches if best_sol.cost is np.inf
-    print(f"HC-Alg (best) -> position: {best_sol.position if best_sol is not None else None}, cost: {best_sol.cost if best_sol is not None else None}\n")
+    print(
+        f"HC-Alg (best) -> position: {best_sol.position if best_sol is not None else None}, cost: {best_sol.cost if best_sol is not None else None}\n"
+    )
     best_sol_cost = best_sol.cost if best_sol is not None else np.inf
     if best_sol_cost == np.inf and len(s_space.ignore_candidates) > 0:
         prev_best_position = min(s_space.ignore_candidates)
@@ -723,4 +912,3 @@ def sgt_hill_climbing_algorithm(s_space: FilterSearchSpace.SearchSpace|None, img
 
     # 3. Update the current best candidate
     s_space.best_candidate = best_sol
-    return None

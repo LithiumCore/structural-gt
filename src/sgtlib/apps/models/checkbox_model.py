@@ -1,4 +1,5 @@
-from PySide6.QtCore import Qt, QAbstractListModel, QModelIndex, QPersistentModelIndex
+from PySide6.QtCore import QAbstractListModel, Qt
+
 
 # Define a simple QAbstractListModel
 class CheckBoxModel(QAbstractListModel):
@@ -73,10 +74,23 @@ class CheckBoxModel(QAbstractListModel):
         self.beginResetModel()
         self.list_data = new_data
         self.endResetModel()
-        self.dataChanged.emit(self.index(0,0), self.index(len(new_data), 0),
-                              [self.IdRole, self.TypeRole, self.TextRole, self.ValueRole, self.DataIdRole,
-                               self.DataValueRole, self.MinValueRole, self.MaxValueRole, self.StepSizeRole,
-                               self.VisibleRole, self.ToolTipRole])
+        self.dataChanged.emit(
+            self.index(0, 0),
+            self.index(len(new_data), 0),
+            [
+                self.IdRole,
+                self.TypeRole,
+                self.TextRole,
+                self.ValueRole,
+                self.DataIdRole,
+                self.DataValueRole,
+                self.MinValueRole,
+                self.MaxValueRole,
+                self.StepSizeRole,
+                self.VisibleRole,
+                self.ToolTipRole,
+            ],
+        )
 
     def roleNames(self):
         return {
@@ -90,5 +104,5 @@ class CheckBoxModel(QAbstractListModel):
             self.MaxValueRole: b"maxValue",
             self.StepSizeRole: b"stepSize",
             self.VisibleRole: b"visible",
-            self.ToolTipRole: b"tooltip"
+            self.ToolTipRole: b"tooltip",
         }

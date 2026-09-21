@@ -4,7 +4,6 @@ A class for building an MDP environment of image filters for graph generation.
 """
 
 
-
 class SGTGraphEnv:
     """
     Class for building a (Markov Decision Process) MDP environment for manipulating the Genetic Algorithm (GA) optimizer

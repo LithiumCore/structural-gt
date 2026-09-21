@@ -4,25 +4,25 @@ Pyside6 (GUI components) controller class for applying image filters.
 """
 
 import logging
-import numpy as np
-from PySide6.QtCore import Signal, Slot, QObject, Property
 
-from ..models.table_model import TableModel
+import numpy as np
+from PySide6.QtCore import Property, QObject, Signal, Slot
+
+from ...compute.graph_analyzer import GraphAnalyzer
+from ...utils.sgt_utils import ProgressData
 from ..models.checkbox_model import CheckBoxModel
 from ..models.imagegrid_model import ImageGridModel
-from ...utils.sgt_utils import ProgressData
-from ...compute.graph_analyzer import GraphAnalyzer
+from ..models.table_model import TableModel
 
 
 class ImageController(QObject):
-
     showImageFilterControls = Signal(bool)
     showCroppingControls = Signal(bool)
 
     _imgFiltersBusyChanged = Signal()
     _histogramBusyChanged = Signal()
 
-    def __init__(self, controller_obj, parent: QObject|None = None):
+    def __init__(self, controller_obj, parent: QObject | None = None):
         super().__init__(parent)
         self._ctrl = controller_obj
         self._img_loaded = False
@@ -43,8 +43,8 @@ class ImageController(QObject):
         self.imgScaleOptionModel = CheckBoxModel([])
         self.imgViewOptionModel = CheckBoxModel([])
         self.saveImgModel = CheckBoxModel([])
-        self.img3dGridModel = ImageGridModel([], set([]))
-        self.imgHistogramModel = ImageGridModel([], set([]))
+        self.img3dGridModel = ImageGridModel([], set())
+        self.imgHistogramModel = ImageGridModel([], set())
 
         # Attach listener for syncing models
         self._ctrl.syncModelSignal.connect(self.synchronize_img_models)
@@ -81,12 +81,12 @@ class ImageController(QObject):
 
     def synchronize_img_models(self, sgt_obj: GraphAnalyzer):
         """
-            Reload image configuration selections and controls from saved dict to QML gui_mcw after the image is loaded.
+        Reload image configuration selections and controls from saved dict to QML gui_mcw after the image is loaded.
 
-            :param sgt_obj: A GraphAnalyzer object with all saved user-selected configurations.
+        :param sgt_obj: A GraphAnalyzer object with all saved user-selected configurations.
         """
         if sgt_obj is None:
-            #self._ctrl.is_syncing = False
+            # self._ctrl.is_syncing = False
             return
 
         try:
@@ -96,14 +96,26 @@ class ImageController(QObject):
             options_img = ntwk_p.image_obj.configs
 
             # Get data from object configs
-            img_controls = [v for v in options_img.values() if v["type"] == "image-control"]
-            bin_filters = [v for v in options_img.values() if v["type"] == "binary-filter"]
-            img_filters = [v for v in options_img.values() if v["type"] == "image-filter"]
-            img_properties = [v for v in options_img.values() if v["type"] == "image-property"]
-            file_options = [v for v in options_img.values() if v["type"] == "file-options"]
+            img_controls = [
+                v for v in options_img.values() if v["type"] == "image-control"
+            ]
+            bin_filters = [
+                v for v in options_img.values() if v["type"] == "binary-filter"
+            ]
+            img_filters = [
+                v for v in options_img.values() if v["type"] == "image-filter"
+            ]
+            img_properties = [
+                v for v in options_img.values() if v["type"] == "image-property"
+            ]
+            file_options = [
+                v for v in options_img.values() if v["type"] == "file-options"
+            ]
 
-            batch_list = [{"id": f"batch_{i}", "text": f" Batch {i + 1}", "value": i}
-                          for i in range(len(sgt_obj.ntwk_p.image_batches))]
+            batch_list = [
+                {"id": f"batch_{i}", "text": f" Batch {i + 1}", "value": i}
+                for i in range(len(sgt_obj.ntwk_p.image_batches))
+            ]
 
             # Update QML adapter-models with fetched data
             self.imgBatchModel.reset_data(batch_list)
@@ -117,11 +129,14 @@ class ImageController(QObject):
 
             self.microscopyPropsModel.reset_data(img_properties)
             self.imagePropsModel.reset_data(sel_img_batch.props)
-            #self._ctrl.is_syncing = False
+            # self._ctrl.is_syncing = False
         except Exception as err:
-            #self._ctrl.is_syncing = False
-            logging.exception("Fatal Error: %s", err, extra={'user': 'SGT Logs'})
-            self._ctrl.showAlertSignal.emit("Fatal Error", "Error re-loading image configurations! Close app and try again.")
+            # self._ctrl.is_syncing = False
+            logging.exception("Fatal Error: %s", err, extra={"user": "SGT Logs"})
+            self._ctrl.showAlertSignal.emit(
+                "Fatal Error",
+                "Error re-loading image configurations! Close app and try again.",
+            )
 
     def reset_img_models(self, only_colors: bool = False):
         """
@@ -137,7 +152,7 @@ class ImageController(QObject):
         self.imgColorsModel.reset_data([])
         if only_colors:
             return
-        self.imgHistogramModel.reset_data([], set([]))
+        self.imgHistogramModel.reset_data([], set())
 
     @Slot(result=bool)
     def display_image(self):
@@ -170,14 +185,18 @@ class ImageController(QObject):
 
         sgt_obj = self._ctrl.get_selected_sgt_obj()
         batch_count = len(sgt_obj.ntwk_p.image_batches)
-        batches_exist = True if batch_count > 1 else False
+        batches_exist = batch_count > 1
         return batches_exist
 
     @Slot(result=str)
     def get_pixmap(self):
         """Returns the URL that QML should use to load the image"""
         curr_img_view = np.random.randint(0, 4)
-        unique_num = self._ctrl.selected_sgt_obj_index + curr_img_view + np.random.randint(low=21, high=1000)
+        unique_num = (
+            self._ctrl.selected_sgt_obj_index
+            + curr_img_view
+            + np.random.randint(low=21, high=1000)
+        )
         return "image://imageProvider/" + str(unique_num)
 
     @Slot(result=int)
@@ -186,7 +205,10 @@ class ImageController(QObject):
             sgt_obj = self._ctrl.get_selected_sgt_obj()
             return sgt_obj.ntwk_p.selected_batch_index
         except AttributeError:
-            logging.exception("No image added! Please add at least one image.", extra={'user': 'SGT Logs'})
+            logging.exception(
+                "No image added! Please add at least one image.",
+                extra={"user": "SGT Logs"},
+            )
             return 0
 
     @Slot(result=bool)
@@ -208,7 +230,7 @@ class ImageController(QObject):
 
             sel_pos = sgt_obj.ntwk_p.selected_batch.selected_frame_pos
         except Exception as err:
-            logging.exception("Image Index Error: %s", err, extra={'user': 'SGT Logs'})
+            logging.exception("Image Index Error: %s", err, extra={"user": "SGT Logs"})
             sel_pos = 0
         return sel_pos
 
@@ -229,7 +251,7 @@ class ImageController(QObject):
             sgt_obj.ntwk_p.select_image_batch(batch_index)
 
             # Trigger sync models and image refresh
-            #self._ctrl.is_syncing = True
+            # self._ctrl.is_syncing = True
             self._ctrl.syncModelSignal.emit(sgt_obj)
             self.reset_img_models()
             ## while self._ctrl.is_syncing:
@@ -237,9 +259,12 @@ class ImageController(QObject):
             ##    logging.info("Waiting for sync to finish...", extra={'user': 'SGT Logs'})
             self._ctrl.changeImageSignal.emit()
         except Exception as err:
-            logging.exception("Batch Change Error: %s", err, extra={'user': 'SGT Logs'})
-            self._ctrl.showAlertSignal.emit("Image Batch Error", f"Error encountered while trying to access batch "
-                                                           f"{batch_index}. Restart app and try again.")
+            logging.exception("Batch Change Error: %s", err, extra={"user": "SGT Logs"})
+            self._ctrl.showAlertSignal.emit(
+                "Image Batch Error",
+                f"Error encountered while trying to access batch "
+                f"{batch_index}. Restart app and try again.",
+            )
 
     @Slot(int)
     def select_batch_image_index(self, img_pos=-1):
@@ -256,7 +281,7 @@ class ImageController(QObject):
             self.reset_img_models()
             self._ctrl.imageChangedSignal.emit()
         except Exception as err:
-            logging.exception(f"Image Index Error: {err}", extra={'user': 'SGT Logs'})
+            logging.exception(f"Image Index Error: {err}", extra={"user": "SGT Logs"})
 
     @Slot(int, bool)
     def toggle_selected_batch_image(self, img_index, selected):
@@ -279,7 +304,9 @@ class ImageController(QObject):
             self._ctrl.changeImageSignal.emit()
 
     @Slot(bool, str, int)
-    def undo_applied_changes(self, undo: bool = True, change_type: str = "cropping", img_idx: int = -1):
+    def undo_applied_changes(
+        self, undo: bool = True, change_type: str = "cropping", img_idx: int = -1
+    ):
         if undo:
             sgt_obj = self._ctrl.get_selected_sgt_obj()
             sgt_obj.ntwk_p.undo_img_changes(img_pos=img_idx)
@@ -298,11 +325,22 @@ class ImageController(QObject):
         try:
             self.start_histogram_calculation()
             sgt_obj = self._ctrl.get_selected_sgt_obj()
-            self._ctrl.submit_job(3, "Calculate-Histogram", (sgt_obj.ntwk_p, img_pos), False)
+            self._ctrl.submit_job(
+                3, "Calculate-Histogram", (sgt_obj.ntwk_p, img_pos), False
+            )
         except Exception as err:
             self.stop_histogram_calculation()
-            logging.exception("Histogram Calculation Error: %s", err, extra={'user': 'SGT Logs'})
-            self._ctrl.handle_finished(3, False, ["Histogram Calculation Failed", "Unable to calculate image histogram!"])
+            logging.exception(
+                "Histogram Calculation Error: %s", err, extra={"user": "SGT Logs"}
+            )
+            self._ctrl.handle_finished(
+                3,
+                False,
+                [
+                    "Histogram Calculation Failed",
+                    "Unable to calculate image histogram!",
+                ],
+            )
 
     @Slot()
     def apply_img_scaling(self):
@@ -318,70 +356,111 @@ class ImageController(QObject):
             self.imagePropsModel.reset_data(sgt_obj.ntwk_p.selected_batch.props)
             self._ctrl.changeImageSignal.emit()
         except Exception as err:
-            logging.exception("Apply Image Scaling: " + str(err), extra={'user': 'SGT Logs'})
-            self._ctrl.handle_finished(-1, False, ["Unable to Rescale Image", "Error while tying to re-scale "
-                                                                              "image. Try again."])
+            logging.exception(
+                "Apply Image Scaling: " + str(err), extra={"user": "SGT Logs"}
+            )
+            self._ctrl.handle_finished(
+                -1,
+                False,
+                [
+                    "Unable to Rescale Image",
+                    ("Error while tying to re-scale image. Try again."),
+                ],
+            )
 
     @Slot(int, int, int, int, int, int)
     def crop_image(self, x, y, crop_width, crop_height, qimg_width, qimg_height):
         """Crop image using PIL and save it."""
         try:
             sgt_obj = self._ctrl.get_selected_sgt_obj()
-            sgt_obj.ntwk_p.crop_image(x, y, crop_width, crop_height, qimg_width, qimg_height)
+            sgt_obj.ntwk_p.crop_image(
+                x, y, crop_width, crop_height, qimg_width, qimg_height
+            )
 
             # Emit signal to update the UI with a new image
             self._ctrl.changeImageSignal.emit()
             self.showCroppingControls.emit(False)
         except Exception as err:
-            logging.exception("Cropping Error: %s", err, extra={'user': 'SGT Logs'})
-            self._ctrl.showAlertSignal.emit("Cropping Error",
-                                      "Error occurred while cropping image. Close the app and try again.")
+            logging.exception("Cropping Error: %s", err, extra={"user": "SGT Logs"})
+            self._ctrl.showAlertSignal.emit(
+                "Cropping Error",
+                "Error occurred while cropping image. Close the app and try again.",
+            )
 
     @Slot(int)
     def save_cropped_image(self, img_pos: int):
         """Save a cropped image to a file."""
         if self._ctrl.wait_flag:
-            logging.info("Please Wait: Another Task Running!", extra={'user': 'SGT Logs'})
+            logging.info(
+                "Please Wait: Another Task Running!", extra={"user": "SGT Logs"}
+            )
             self._ctrl.showAlertSignal.emit("Please Wait", "Another Task Running!")
             return
 
         try:
             self.start_task()
             sgt_obj = self._ctrl.get_selected_sgt_obj()
-            self._ctrl.submit_job(1, "Save-Cropped-Image", (sgt_obj.ntwk_p, img_pos), False)
+            self._ctrl.submit_job(
+                1, "Save-Cropped-Image", (sgt_obj.ntwk_p, img_pos), False
+            )
         except Exception as err:
             self.stop_task()
-            logging.exception("Unable to Save Cropped Image: " + str(err), extra={'user': 'SGT Logs'})
-            self._ctrl.handle_finished(-1, False, ["Unable to Save Cropped Image", "Error saving cropped image to file. Try again."])
+            logging.exception(
+                "Unable to Save Cropped Image: " + str(err), extra={"user": "SGT Logs"}
+            )
+            self._ctrl.handle_finished(
+                -1,
+                False,
+                [
+                    "Unable to Save Cropped Image",
+                    "Error saving cropped image to file. Try again.",
+                ],
+            )
 
     @Slot()
     def save_img_files(self):
         """Retrieve and save images to the file."""
         if self._ctrl.wait_flag:
-            logging.info("Please Wait: Another Task Running!", extra={'user': 'SGT Logs'})
+            logging.info(
+                "Please Wait: Another Task Running!", extra={"user": "SGT Logs"}
+            )
             self._ctrl.showAlertSignal.emit("Please Wait", "Another Task Running!")
             return
 
-        self._ctrl.handle_progress_update(ProgressData(percent=0, sender="GT", message=f"Saving images..."))
+        self._ctrl.handle_progress_update(
+            ProgressData(percent=0, sender="GT", message="Saving images...")
+        )
         try:
             if self._ctrl.get_selected_sgt_obj().ntwk_p.selected_batch.is_graph_only:
                 return
 
-            self._ctrl.handle_progress_update(ProgressData(percent=10, sender="GT", message=f"Saving images..."))
+            self._ctrl.handle_progress_update(
+                ProgressData(percent=10, sender="GT", message="Saving images...")
+            )
             sel_images = self._ctrl.get_selected_images()
             for val in self.saveImgModel.list_data:
                 for img in sel_images:
                     img.configs[val["id"]]["value"] = val["value"]
 
-            self._ctrl.handle_progress_update(ProgressData(percent=20, sender="GT", message=f"Saving images..."))
+            self._ctrl.handle_progress_update(
+                ProgressData(percent=20, sender="GT", message="Saving images...")
+            )
             self.start_task()
             sgt_obj = self._ctrl.get_selected_sgt_obj()
             self._ctrl.submit_job(1, "Save-Images", (sgt_obj.ntwk_p, None), True)
         except Exception as err:
             self.stop_task()
-            logging.exception("Unable to Save Image Files: " + str(err), extra={'user': 'SGT Logs'})
-            self._ctrl.handle_finished(-1, False,
-                                           ["Unable to Save Image Files", "Error saving images to file. Try again."])
+            logging.exception(
+                "Unable to Save Image Files: " + str(err), extra={"user": "SGT Logs"}
+            )
+            self._ctrl.handle_finished(
+                -1,
+                False,
+                [
+                    "Unable to Save Image Files",
+                    "Error saving images to file. Try again.",
+                ],
+            )
 
     @Slot(int, int)
     def run_retrieve_img_colors(self, img_pos: int, max_colors: int):
@@ -393,13 +472,24 @@ class ImageController(QObject):
         try:
             self.start_task()
             ntwk_p = self._ctrl.get_selected_sgt_obj().ntwk_p
-            self._ctrl.submit_job(1, "Retrieve-Colors", (ntwk_p, img_pos, max_colors), True)
+            self._ctrl.submit_job(
+                1, "Retrieve-Colors", (ntwk_p, img_pos, max_colors), True
+            )
         except Exception as err:
             self.stop_task()
-            logging.exception(f"Retrieve Colors Error: {err}", extra={'user': 'SGT Logs'})
+            logging.exception(
+                f"Retrieve Colors Error: {err}", extra={"user": "SGT Logs"}
+            )
             self._ctrl.handle_progress_update(
-                ProgressData(type="error", sender="GT", message=f"Unable to retrieve colors! Try again."))
-            self._ctrl.handle_finished(1, False, ["Get Colors Failed", "Unable to retrieve dominant colors!"])
+                ProgressData(
+                    type="error",
+                    sender="GT",
+                    message="Unable to retrieve colors! Try again.",
+                )
+            )
+            self._ctrl.handle_finished(
+                1, False, ["Get Colors Failed", "Unable to retrieve dominant colors!"]
+            )
 
     @Slot(int, int)
     def run_eliminate_img_colors(self, img_pos: int, swap_white: int):
@@ -417,12 +507,23 @@ class ImageController(QObject):
             for val in self.imgColorsModel.list_data:
                 for color in colors:
                     if color.hex_code == val["text"]:
-                        color.is_selected = True if val["value"] == 1 else False
+                        color.is_selected = val["value"] == 1
 
-            self._ctrl.submit_job(1, "Eliminate-Colors", (ntwk_p, img_pos, swap_white), True)
+            self._ctrl.submit_job(
+                1, "Eliminate-Colors", (ntwk_p, img_pos, swap_white), True
+            )
         except Exception as err:
             self.stop_task()
-            logging.exception(f"Eliminate Colors Error: {err}", extra={'user': 'SGT Logs'})
+            logging.exception(
+                f"Eliminate Colors Error: {err}", extra={"user": "SGT Logs"}
+            )
             self._ctrl.handle_progress_update(
-                ProgressData(type="error", sender="GT", message=f"Unable to eliminate colors! Try again."))
-            self._ctrl.handle_finished(1, False, ["Eliminate Colors Failed", "Unable to eliminate colors!"])
+                ProgressData(
+                    type="error",
+                    sender="GT",
+                    message="Unable to eliminate colors! Try again.",
+                )
+            )
+            self._ctrl.handle_finished(
+                1, False, ["Eliminate Colors Failed", "Unable to eliminate colors!"]
+            )

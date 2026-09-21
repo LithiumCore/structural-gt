@@ -4,10 +4,10 @@
 A persistent process worker for running long GT and AI-search jobs.
 """
 
-
 import gc
 import threading
 from multiprocessing import Process, Queue
+
 from PySide6.QtCore import QObject, Signal
 
 
@@ -47,6 +47,7 @@ class ProgressListener(QObject):
     """
     Thread that listens to the multiprocessing.Queue and emits signals into QML UI.
     """
+
     progress = Signal(object)
     finished = Signal(bool, object)
 
@@ -74,16 +75,19 @@ class ProgressListener(QObject):
 
     def stop(self):
         try:
-             self._updates_queue.put_nowait(("STOP", None))  # wakes up the blocking get()
+            self._updates_queue.put_nowait(
+                ("STOP", None)
+            )  # wakes up the blocking get()
         except Exception as e:
-             print(f"Thread Listener Exception: {e}")
+            print(f"Thread Listener Exception: {e}")
 
 
 class PersistentProcessWorker(QObject):
-
     # workerStarted = Signal()
     inProgress = Signal(object)
-    taskCompleted = Signal(int, bool, object)  # worker-id, success/fail, result (object)
+    taskCompleted = Signal(
+        int, bool, object
+    )  # worker-id, success/fail, result (object)
 
     def __init__(self, worker_id, parent=None):
         """
@@ -127,7 +131,9 @@ class PersistentProcessWorker(QObject):
             # start the persistent process
             self._job_queue = Queue()
             self._status_queue = Queue()
-            self._process = Process(target=_worker_loop, args=(self._job_queue, self._status_queue))
+            self._process = Process(
+                target=_worker_loop, args=(self._job_queue, self._status_queue)
+            )
             self._process.start()
 
             if self._status_listener:

@@ -1,4 +1,5 @@
-from PySide6.QtCore import Qt, QAbstractListModel
+from PySide6.QtCore import QAbstractListModel, Qt
+
 from ...utils.sgt_utils import img_to_base64
 
 
@@ -13,12 +14,15 @@ class ImageGridModel(QAbstractListModel):
         if len(img_lst) == 0:
             self._image_data = []
             return
-        self._image_data = [{
-            "id": i,
-            "text": f" Image {i + 1}",
-            "image": img_to_base64(img_lst[i]) if img_lst[i] is not None else "",
-            "selected": 1 if i in selected_images else 0
-        } for i in range(len(img_lst))]
+        self._image_data = [
+            {
+                "id": i,
+                "text": f" Image {i + 1}",
+                "image": img_to_base64(img_lst[i]) if img_lst[i] is not None else "",
+                "selected": 1 if i in selected_images else 0,
+            }
+            for i in range(len(img_lst))
+        ]
 
     def rowCount(self, parent=None):
         return len(self._image_data)
@@ -59,23 +63,31 @@ class ImageGridModel(QAbstractListModel):
         return False
 
     def reset_data(self, new_data: list, selected_images: set):
-        """ Resets the data to be displayed. """
+        """Resets the data to be displayed."""
         if new_data is None:
             return
         self.beginResetModel()
 
         self._image_data = []
         if len(new_data) > 0:
-            self._image_data = [{
-                "id": i,
-                "text": f" Image {i + 1}",
-                "image": img_to_base64(new_data[i]) if new_data[i] is not None else "",
-                "selected": 1 if i in selected_images else 0
-            } for i in range(len(new_data))]
+            self._image_data = [
+                {
+                    "id": i,
+                    "text": f" Image {i + 1}",
+                    "image": img_to_base64(new_data[i])
+                    if new_data[i] is not None
+                    else "",
+                    "selected": 1 if i in selected_images else 0,
+                }
+                for i in range(len(new_data))
+            ]
 
         self.endResetModel()
-        self.dataChanged.emit(self.index(0, 0), self.index(len(new_data), 0),
-                              [self.IdRole, self.ImageRole, self.SelectedRole])
+        self.dataChanged.emit(
+            self.index(0, 0),
+            self.index(len(new_data), 0),
+            [self.IdRole, self.ImageRole, self.SelectedRole],
+        )
 
     def roleNames(self):
         return {

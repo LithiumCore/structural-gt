@@ -3,31 +3,35 @@
 Pyside6 (GUI components) controller class for managing the project.
 """
 
+import logging
 import os
 import pickle
-import logging
-import requests
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import requests
 from packaging import version
+
 # from typing import TYPE_CHECKING, Optional
-from PySide6.QtCore import Signal, Slot, QObject
+from PySide6.QtCore import QObject, Signal, Slot
+
+from ... import __title__, __version__
+from ...imaging.image_processor import (
+    ALLOWED_GRAPH_FILE_EXTENSIONS,
+    ALLOWED_IMG_EXTENSIONS,
+)
+from ...utils.sgt_utils import img_to_base64, verify_path
 
 # if TYPE_CHECKING:
-    # False at run time, only for a type-checker
-    # from _typeshed import SupportsWrite
-
+# False at run time, only for a type-checker
+# from _typeshed import SupportsWrite
 from ..models.table_model import TableModel
-from ... import __version__, __title__
-from ...utils.sgt_utils import img_to_base64, verify_path
-from ...imaging.image_processor import ALLOWED_IMG_EXTENSIONS, ALLOWED_GRAPH_FILE_EXTENSIONS
 
 
 class ProjectController(QObject):
-
     projectOpenedSignal = Signal(str)
 
-    def __init__(self, controller_obj, parent: QObject|None = None):
+    def __init__(self, controller_obj, parent: QObject | None = None):
         super().__init__(parent)
         self._ctrl = controller_obj
         self._project_open = False
@@ -38,7 +42,7 @@ class ProjectController(QObject):
 
         # Create Models
         self.imgThumbnailModel = TableModel([])
-        
+
     def start_task(self):
         """Activate the wait flag and send a wait signal."""
         self._ctrl.wait_flag = True
@@ -57,13 +61,16 @@ class ProjectController(QObject):
             return False
         try:
             file_path = self._project_data["file_path"]
-            with open(file_path, 'wb') as project_file:
-
+            with open(file_path, "wb") as project_file:
                 pickle.dump(self._ctrl.sgt_objs, project_file)
             return True
         except Exception as err:
-            logging.exception("Project Saving Error: %s", err, extra={'user': 'SGT Logs'})
-            self._ctrl.showAlertSignal.emit("Save Error", "Unable to save project data. Close app and try again.")
+            logging.exception(
+                "Project Saving Error: %s", err, extra={"user": "SGT Logs"}
+            )
+            self._ctrl.showAlertSignal.emit(
+                "Save Error", "Unable to save project data. Close app and try again."
+            )
             return False
 
     def get_thumbnail_list(self):
@@ -81,7 +88,11 @@ class ProjectController(QObject):
             if sgt_obj.ntwk_p.selected_batch.is_graph_only:
                 empty_cv: np.ndarray = np.ones((256, 256), dtype=np.uint8)
                 empty_cv *= 255
-                img_cv = empty_cv if sgt_obj.ntwk_p.graph_obj.img_ntwk is None else sgt_obj.ntwk_p.graph_obj.img_ntwk
+                img_cv = (
+                    empty_cv
+                    if sgt_obj.ntwk_p.graph_obj.img_ntwk is None
+                    else sgt_obj.ntwk_p.graph_obj.img_ntwk
+                )
             else:
                 img_cv = sgt_obj.ntwk_p.image_2d
             base64_data = img_to_base64(img_cv)
@@ -180,16 +191,17 @@ class ProjectController(QObject):
             "</p><p><br>"
             "Copyright (C) 2018-2025<br>The Regents of the University of Michigan."
             "</p>"
-            "</html>")
+            "</html>"
+        )
         return about_app
 
     @Slot(str, result=str)
     def get_file_extensions(self, option):
         if option == "img":
-            pattern_string = ' '.join(ALLOWED_IMG_EXTENSIONS)
+            pattern_string = " ".join(ALLOWED_IMG_EXTENSIONS)
             return f"Image files ({pattern_string})"
         if option == "graph":
-            pattern_string = ' '.join(ALLOWED_GRAPH_FILE_EXTENSIONS)
+            pattern_string = " ".join(ALLOWED_GRAPH_FILE_EXTENSIONS)
             return f"Graph files ({pattern_string})"
         elif option == "proj":
             return "Project files (*.sgtproj)"
@@ -215,17 +227,16 @@ class ProjectController(QObject):
 
     @Slot(result=bool)
     def enable_prev_nav_btn(self):
-        if (self._ctrl.selected_sgt_obj_index == 0) or self._ctrl.is_task_running():
-            return False
-        else:
-            return True
+        return not (
+            self._ctrl.selected_sgt_obj_index == 0 or self._ctrl.is_task_running()
+        )
 
     @Slot(result=bool)
     def enable_next_nav_btn(self):
-        if (self._ctrl.selected_sgt_obj_index == (len(self._ctrl.sgt_objs) - 1)) or self._ctrl.is_task_running():
-            return False
-        else:
-            return True
+        return not (
+            self._ctrl.selected_sgt_obj_index == len(self._ctrl.sgt_objs) - 1
+            or self._ctrl.is_task_running()
+        )
 
     @Slot(result=bool)
     def load_prev_image(self):
@@ -249,7 +260,9 @@ class ProjectController(QObject):
     def run_save_project(self):
         """"""
         if self._ctrl.wait_flag:
-            logging.info("Please Wait: Another Task Running!", extra={'user': 'SGT Logs'})
+            logging.info(
+                "Please Wait: Another Task Running!", extra={"user": "SGT Logs"}
+            )
             self._ctrl.showAlertSignal.emit("Please Wait", "Another Task Running!")
             return False
 
@@ -291,7 +304,7 @@ class ProjectController(QObject):
         self._project_open = False
         success, result = verify_path(dir_path)
         if not success:
-            logging.info(result, extra={'user': 'SGT Logs'})
+            logging.info(result, extra={"user": "SGT Logs"})
             self._ctrl.showAlertSignal.emit("File/Directory Error", result)
             return False
 
@@ -301,8 +314,12 @@ class ProjectController(QObject):
 
         try:
             if os.path.exists(proj_path):
-                logging.info(f"Project '{proj_name}' already exists.", extra={'user': 'SGT Logs'})
-                self._ctrl.showAlertSignal.emit("Project Error", f"Error: Project '{proj_name}' already exists.")
+                logging.info(
+                    f"Project '{proj_name}' already exists.", extra={"user": "SGT Logs"}
+                )
+                self._ctrl.showAlertSignal.emit(
+                    "Project Error", f"Error: Project '{proj_name}' already exists."
+                )
                 return False
 
             # Create an empty project file (touch creates it if it doesn’t exist)
@@ -313,20 +330,29 @@ class ProjectController(QObject):
             self._project_data["file_path"] = proj_path
             self._project_open = True
             self.projectOpenedSignal.emit(proj_name)
-            logging.info(f"File '{proj_name}' created successfully in '{dir_path}'.", extra={'user': 'SGT Logs'})
+            logging.info(
+                f"File '{proj_name}' created successfully in '{dir_path}'.",
+                extra={"user": "SGT Logs"},
+            )
             return True
         except Exception as err:
             # self._project_open = False
-            logging.exception("Create Project Error: %s", err, extra={'user': 'SGT Logs'})
-            self._ctrl.showAlertSignal.emit("Create Project Error",
-                                      "Failed to create SGT project. Close the app and try again.")
+            logging.exception(
+                "Create Project Error: %s", err, extra={"user": "SGT Logs"}
+            )
+            self._ctrl.showAlertSignal.emit(
+                "Create Project Error",
+                "Failed to create SGT project. Close the app and try again.",
+            )
             return False
 
     @Slot(str, result=bool)
     def open_sgt_project(self, sgt_path):
         """Opens and loads the SGT project from the '.sgtproj' file"""
         if self._ctrl.wait_flag:
-            logging.info("Please Wait: Another Task Running!", extra={'user': 'SGT Logs'})
+            logging.info(
+                "Please Wait: Another Task Running!", extra={"user": "SGT Logs"}
+            )
             self._ctrl.showAlertSignal.emit("Please Wait", "Another Task Running!")
             return False
 
@@ -338,14 +364,14 @@ class ProjectController(QObject):
             if success:
                 sgt_path = result
             else:
-                logging.info(result, extra={'user': 'SGT Logs'})
+                logging.info(result, extra={"user": "SGT Logs"})
                 self._ctrl.showAlertSignal.emit("File/Directory Error", result)
                 self.stop_task()
                 return False
             img_dir, proj_name = os.path.split(str(sgt_path))
 
             # Read and load project data and SGT objects
-            with open(str(sgt_path), 'rb') as sgt_file:
+            with open(str(sgt_path), "rb") as sgt_file:
                 loaded_objs = pickle.load(sgt_file)
             self._ctrl.sgt_objs.clear()
             self._ctrl.sgt_objs.update(loaded_objs)
@@ -365,13 +391,21 @@ class ProjectController(QObject):
 
             # Load Image to GUI - activates QML
             self._ctrl.load_image(reload_thumbnails=True)
-            logging.info(f"File '{proj_name}' opened successfully in '{sgt_path}'.", extra={'user': 'SGT Logs'})
+            logging.info(
+                f"File '{proj_name}' opened successfully in '{sgt_path}'.",
+                extra={"user": "SGT Logs"},
+            )
             return True
         except Exception as err:
             self.stop_task()
-            logging.exception("Project Opening Error: %s", err, extra={'user': 'SGT Logs'})
-            self._ctrl.showAlertSignal.emit("Open Project Error", "Unable to open .sgtproj file! Try again. If the "
-                                                            "issue persists, the file may be corrupted or incompatible. "
-                                                            "Consider restoring from a backup or contacting support for "
-                                                            "assistance.")
+            logging.exception(
+                "Project Opening Error: %s", err, extra={"user": "SGT Logs"}
+            )
+            self._ctrl.showAlertSignal.emit(
+                "Open Project Error",
+                "Unable to open .sgtproj file! Try again. If the "
+                "issue persists, the file may be corrupted or incompatible. "
+                "Consider restoring from a backup or contacting support for "
+                "assistance.",
+            )
             return False

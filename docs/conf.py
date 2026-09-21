@@ -22,13 +22,13 @@ import time
 
 # -- Project information -----------------------------------------------------
 
-project = 'StructuralGT'
+project = "StructuralGT"
 copyright = f"{time.localtime().tm_year} Dickson Owuor"
-author = 'Dickson Owuor'
+author = "Dickson Owuor"
 
 # The full version, including alpha/beta/rc tags
-release = '2.0'
-version = '2.0.1'
+release = "2.0"
+version = "2.0.1"
 
 
 # -- General configuration ---------------------------------------------------
@@ -44,9 +44,9 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.coverage",
     "myst_parser",
-    #"furo.gen_tutorials",
-    #"sphinx_gallery.gen_gallery",
-    #"sphinx_github_changelog",
+    # "furo.gen_tutorials",
+    # "sphinx_gallery.gen_gallery",
+    # "sphinx_github_changelog",
 ]
 
 
@@ -96,11 +96,11 @@ html_baseurl = "https://structural-gt.readthedocs.io"
 html_copy_source = False
 # html_favicon = "_static/img/favicon.png"
 html_theme_options = {
-    #"light_logo": "img/sgt_black.svg",
-    #"dark_logo": "img/sgt_white.svg",
-    #"gtag": "G-6H9C8TWXZ8",
+    # "light_logo": "img/sgt_black.svg",
+    # "dark_logo": "img/sgt_white.svg",
+    # "gtag": "G-6H9C8TWXZ8",
     "description": "A software tool that allows graph theory analysis of nano-structures.",
-    #"image": "img/sgt-github.png",
+    # "image": "img/sgt-github.png",
     "versioning": True,
     "source_repository": "https://github.com/owuordickson/structural-gt",
     "source_branch": "main",

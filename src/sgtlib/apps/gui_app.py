@@ -6,16 +6,17 @@ Pyside6 implementation of StructuralGT user interface.
 
 import os
 import sys
-from PySide6.QtCore import QObject
-from PySide6.QtWidgets import QApplication
-from PySide6.QtQml import QQmlApplicationEngine
-# from PySide6.QtQuickControls2 import QQuickStyle
 
+from PySide6.QtCore import QObject
+from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtWidgets import QApplication
+
+# from PySide6.QtQuickControls2 import QQuickStyle
 from .controllers.main_controller import MainController
 from .models.image_provider import ImageProvider
 
-class PySideApp(QObject):
 
+class PySideApp(QObject):
     @staticmethod
     def _force_backend():
         # High DPI fixes
@@ -28,6 +29,7 @@ class PySideApp(QObject):
         # Ensure Qt finds the right plugins (like when bundled)
         # Adjust the path if PySide6 is installed elsewhere
         import PySide6
+
         pyside_file = PySide6.__file__
 
         if pyside_file is not None:
@@ -38,45 +40,97 @@ class PySideApp(QObject):
         """Initialize the models and providers used by the QML engine."""
         self._ui_engine.addImageProvider("imageProvider", self._image_provider)
 
-        self._ui_engine.rootContext().setContextProperty("graphPropsModel", self._ctrl.graph_ctrl.graphPropsModel)
-        self._ui_engine.rootContext().setContextProperty("graphComputeModel", self._ctrl.graph_ctrl.graphComputeModel)
-        self._ui_engine.rootContext().setContextProperty("gteTreeModel", self._ctrl.graph_ctrl.gteTreeModel)
-        self._ui_engine.rootContext().setContextProperty("gtcListModel", self._ctrl.graph_ctrl.gtcListModel)
-        self._ui_engine.rootContext().setContextProperty("gtcScalingModel", self._ctrl.graph_ctrl.gtcScalingModel)
-        self._ui_engine.rootContext().setContextProperty("exportGraphModel", self._ctrl.graph_ctrl.exportGraphModel)
+        self._ui_engine.rootContext().setContextProperty(
+            "graphPropsModel", self._ctrl.graph_ctrl.graphPropsModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "graphComputeModel", self._ctrl.graph_ctrl.graphComputeModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "gteTreeModel", self._ctrl.graph_ctrl.gteTreeModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "gtcListModel", self._ctrl.graph_ctrl.gtcListModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "gtcScalingModel", self._ctrl.graph_ctrl.gtcScalingModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "exportGraphModel", self._ctrl.graph_ctrl.exportGraphModel
+        )
 
-        self._ui_engine.rootContext().setContextProperty("microscopyPropsModel", self._ctrl.img_ctrl.microscopyPropsModel)
-        self._ui_engine.rootContext().setContextProperty("imagePropsModel", self._ctrl.img_ctrl.imagePropsModel)
-        self._ui_engine.rootContext().setContextProperty("imgBatchModel", self._ctrl.img_ctrl.imgBatchModel)
-        self._ui_engine.rootContext().setContextProperty("imgControlModel", self._ctrl.img_ctrl.imgControlModel)
-        self._ui_engine.rootContext().setContextProperty("imgBinFilterModel", self._ctrl.img_ctrl.imgBinFilterModel)
-        self._ui_engine.rootContext().setContextProperty("imgFilterModel", self._ctrl.img_ctrl.imgFilterModel)
-        self._ui_engine.rootContext().setContextProperty("imgColorsModel", self._ctrl.img_ctrl.imgColorsModel)
-        self._ui_engine.rootContext().setContextProperty("imgScaleOptionModel", self._ctrl.img_ctrl.imgScaleOptionModel)
-        self._ui_engine.rootContext().setContextProperty("imgViewOptionModel", self._ctrl.img_ctrl.imgViewOptionModel)
-        self._ui_engine.rootContext().setContextProperty("saveImgModel", self._ctrl.img_ctrl.saveImgModel)
-        self._ui_engine.rootContext().setContextProperty("img3dGridModel", self._ctrl.img_ctrl.img3dGridModel)
-        self._ui_engine.rootContext().setContextProperty("imgHistogramModel", self._ctrl.img_ctrl.imgHistogramModel)
+        self._ui_engine.rootContext().setContextProperty(
+            "microscopyPropsModel", self._ctrl.img_ctrl.microscopyPropsModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "imagePropsModel", self._ctrl.img_ctrl.imagePropsModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "imgBatchModel", self._ctrl.img_ctrl.imgBatchModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "imgControlModel", self._ctrl.img_ctrl.imgControlModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "imgBinFilterModel", self._ctrl.img_ctrl.imgBinFilterModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "imgFilterModel", self._ctrl.img_ctrl.imgFilterModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "imgColorsModel", self._ctrl.img_ctrl.imgColorsModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "imgScaleOptionModel", self._ctrl.img_ctrl.imgScaleOptionModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "imgViewOptionModel", self._ctrl.img_ctrl.imgViewOptionModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "saveImgModel", self._ctrl.img_ctrl.saveImgModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "img3dGridModel", self._ctrl.img_ctrl.img3dGridModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "imgHistogramModel", self._ctrl.img_ctrl.imgHistogramModel
+        )
 
-        self._ui_engine.rootContext().setContextProperty("imgThumbnailModel", self._ctrl.proj_ctrl.imgThumbnailModel)
-        self._ui_engine.rootContext().setContextProperty("aiSearchModel", self._ctrl.ai_ctrl.aiSearchModel)
+        self._ui_engine.rootContext().setContextProperty(
+            "imgThumbnailModel", self._ctrl.proj_ctrl.imgThumbnailModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "aiSearchModel", self._ctrl.ai_ctrl.aiSearchModel
+        )
 
     def _initialize_controllers(self):
         """Initialize the controllers used by the QML engine."""
         self._ui_engine.rootContext().setContextProperty("mainController", self._ctrl)
-        self._ui_engine.rootContext().setContextProperty("themeManager", self._ctrl.theme_ctrl)
-        self._ui_engine.rootContext().setContextProperty("aiController", self._ctrl.ai_ctrl)
-        self._ui_engine.rootContext().setContextProperty("imageController", self._ctrl.img_ctrl)
-        self._ui_engine.rootContext().setContextProperty("graphController", self._ctrl.graph_ctrl)
-        self._ui_engine.rootContext().setContextProperty("projectController", self._ctrl.proj_ctrl)
-        self._ui_engine.rootContext().setContextProperty("synthesisController", self._ctrl.synth_ctrl)
+        self._ui_engine.rootContext().setContextProperty(
+            "themeManager", self._ctrl.theme_ctrl
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "aiController", self._ctrl.ai_ctrl
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "imageController", self._ctrl.img_ctrl
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "graphController", self._ctrl.graph_ctrl
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "projectController", self._ctrl.proj_ctrl
+        )
+        self._ui_engine.rootContext().setContextProperty(
+            "synthesisController", self._ctrl.synth_ctrl
+        )
 
     def __init__(self):
         super().__init__()
         # PySideApp._force_backend()
         self.app = QApplication(sys.argv)
         self._ui_engine = QQmlApplicationEngine()
-        self._qml_file = 'qml/MainWindow.qml'
+        self._qml_file = "qml/MainWindow.qml"
 
         # IMPORTANT: register the "qml" directory
         qml_dir = os.path.dirname(os.path.abspath(__file__))

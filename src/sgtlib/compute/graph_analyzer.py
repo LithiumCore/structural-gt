@@ -2,39 +2,53 @@
 """
 Compute graph theory metrics
 """
-import os
-import math
-import time
+
 import copy
 import datetime
 import logging
-import gudhi
+import math
 import multiprocessing
-import numpy as np
-import scipy as sp
-import pandas as pd
-import igraph as ig
-import networkx as nx
-import matplotlib.table as tbl
-import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
+import os
+import time
 from collections import defaultdict
-from statistics import stdev, StatisticsError
+from statistics import StatisticsError, stdev
+
+import gudhi
+import igraph as ig
+import matplotlib.pyplot as plt
+import matplotlib.table as tbl
+import networkx as nx
+import numpy as np
+import pandas as pd
+import scipy as sp
+from matplotlib.axes import Axes
 from matplotlib.backends.backend_pdf import PdfPages
 from networkx import exception
-
-from networkx.algorithms.centrality import betweenness_centrality, closeness_centrality, eigenvector_centrality
-from networkx.algorithms import average_node_connectivity, global_efficiency, clustering
-from networkx.algorithms import degree_assortativity_coefficient
-from networkx.algorithms.flow import maximum_flow
+from networkx.algorithms import (
+    average_node_connectivity,
+    clustering,
+    degree_assortativity_coefficient,
+    global_efficiency,
+)
+from networkx.algorithms.centrality import (
+    betweenness_centrality,
+    closeness_centrality,
+    eigenvector_centrality,
+)
 from networkx.algorithms.distance_measures import diameter, periphery
+from networkx.algorithms.flow import maximum_flow
 from networkx.algorithms.wiener import wiener_index
 
-from ..networks.fiber_network import FiberNetworkBuilder
 from ..imaging.image_processor import ImageProcessor
+from ..networks.fiber_network import FiberNetworkBuilder
 from ..utils.config_loader import load_gtc_configs
 from ..utils.gen_plots import CurveFitModels
-from ..utils.sgt_utils import get_num_cores, AbortException, ProgressUpdate, ProgressData
+from ..utils.sgt_utils import (
+    AbortException,
+    ProgressData,
+    ProgressUpdate,
+    get_num_cores,
+)
 
 logger = logging.getLogger("SGT App")
 
@@ -73,7 +87,9 @@ def _worker_vertex_connectivity(ig_graph_obj, i, j):
         lnc = ig_graph_obj.vertex_connectivity(source=i, target=j, neighbors="negative")
         return lnc if lnc != -1 else None
     except Exception as err:
-        logging.exception("Computing iGraph ANC Error: %s", err, extra={'user': 'SGT Logs'})
+        logging.exception(
+            "Computing iGraph ANC Error: %s", err, extra={"user": "SGT Logs"}
+        )
         return None
 
 
@@ -86,7 +102,12 @@ class GraphAnalyzer(ProgressUpdate):
         allow_multiprocessing: a decision to allow multiprocessing computing.
     """
 
-    def __init__(self, imp: ImageProcessor, allow_multiprocessing: bool = False, use_igraph: bool = True):
+    def __init__(
+        self,
+        imp: ImageProcessor,
+        allow_multiprocessing: bool = False,
+        use_igraph: bool = True,
+    ):
         """
         A class that computes all the user-selected graph theory metrics and writes the results in a PDF file.
 
@@ -105,24 +126,38 @@ class GraphAnalyzer(ProgressUpdate):
         >>> GraphAnalyzer.safe_run_analyzer(metrics_obj, print_update, save_to_pdf=True)
 
         """
-        super(GraphAnalyzer, self).__init__()
-        self._configs: dict = load_gtc_configs(imp.config_file)  # graph theory computation parameters and options.
+        super().__init__()
+        self._configs: dict = load_gtc_configs(
+            imp.config_file
+        )  # graph theory computation parameters and options.
         self._props: list = []
         self._allow_mp: bool = allow_multiprocessing
         self._use_igraph: bool = use_igraph
         self._ntwk_p: ImageProcessor = imp
         self._plot_figures: list | None = None
-        self._results_df:   None | pd.DataFrame = None
+        self._results_df: None | pd.DataFrame = None
         self._weighted_results_df: None | pd.DataFrame = None
         self._scaling_results: dict = {}
-        self._persistent_homology_data: dict[str, None|list|np.ndarray] = {"persistent_homology": None, "point_cloud_data": None}
-        self._histogram_data = {"degree_distribution": [0], "clustering_coefficients": [0],
-                               "betweenness_distribution": [0], "closeness_distribution": [0],
-                               "eigenvector_distribution": [0], "ohms_distribution": [0],
-                               "percolation_distribution": [], "weighted_degree_distribution": [0],
-                               "weighted_clustering_coefficients": [0], "weighted_betweenness_distribution": [0],
-                               "currentflow_distribution": [0], "weighted_closeness_distribution": [0],
-                               "weighted_eigenvector_distribution": [0], "weighted_percolation_distribution": [0],}
+        self._persistent_homology_data: dict[str, None | list | np.ndarray] = {
+            "persistent_homology": None,
+            "point_cloud_data": None,
+        }
+        self._histogram_data = {
+            "degree_distribution": [0],
+            "clustering_coefficients": [0],
+            "betweenness_distribution": [0],
+            "closeness_distribution": [0],
+            "eigenvector_distribution": [0],
+            "ohms_distribution": [0],
+            "percolation_distribution": [],
+            "weighted_degree_distribution": [0],
+            "weighted_clustering_coefficients": [0],
+            "weighted_betweenness_distribution": [0],
+            "currentflow_distribution": [0],
+            "weighted_closeness_distribution": [0],
+            "weighted_eigenvector_distribution": [0],
+            "weighted_percolation_distribution": [0],
+        }
 
     @property
     def configs(self) -> dict:
@@ -150,17 +185,17 @@ class GraphAnalyzer(ProgressUpdate):
         self._ntwk_p = ntwk_p
 
     @property
-    def plot_figures(self) -> list|None:
+    def plot_figures(self) -> list | None:
         """Returns the list of figures generated by the graph theory metrics computation."""
         return self._plot_figures
 
     @property
-    def results_df(self) -> pd.DataFrame|None:
+    def results_df(self) -> pd.DataFrame | None:
         """Returns the Pandas DataFrame containing the results of the graph theory metrics computation."""
         return self._results_df
 
     @property
-    def weighted_results_df(self) -> pd.DataFrame|None:
+    def weighted_results_df(self) -> pd.DataFrame | None:
         """Returns the Pandas DataFrame containing the weighted results of the graph theory metrics computation."""
         return self._weighted_results_df
 
@@ -173,7 +208,7 @@ class GraphAnalyzer(ProgressUpdate):
 
     def run_analyzer(self) -> None:
         """
-            Execute functions that will process image filters and extract the graph from the grayscale image
+        Execute functions that will process image filters and extract the graph from the grayscale image
         """
 
         # 1. Get graph extracted from selected images
@@ -187,14 +222,22 @@ class GraphAnalyzer(ProgressUpdate):
             self._ntwk_p.remove_listener(self.track_img_progress)
             self.abort = self._ntwk_p.abort
             if not self.abort:
-                self.update_status(ProgressData(percent=100, sender="GT", message=f"Graph successfully extracted!"))
+                self.update_status(
+                    ProgressData(
+                        percent=100,
+                        sender="GT",
+                        message="Graph successfully extracted!",
+                    )
+                )
             graph_obj = self._ntwk_p.graph_obj
 
         if self.abort:
             return
 
         # 3a. Compute Unweighted GT parameters
-        self._results_df = self.compute_gt_metrics(graph_obj.nx_giant_graph)  # replace with graph_obj.nx_giant_graph
+        self._results_df = self.compute_gt_metrics(
+            graph_obj.nx_giant_graph
+        )  # replace with graph_obj.nx_giant_graph
 
         # 3b. Compute Scaling Scatter Plots
         scaling_data = None
@@ -202,15 +245,26 @@ class GraphAnalyzer(ProgressUpdate):
             scaling_data = self.compute_scaling_data()
 
         if self.abort:
-            self.update_status(ProgressData(type="error", sender="GT", message=f"Problem encountered while computing un-weighted GT parameters."))
+            self.update_status(
+                ProgressData(
+                    type="error",
+                    sender="GT",
+                    message="Problem encountered while computing un-weighted GT parameters.",
+                )
+            )
             return
 
         # 4. Compute Weighted GT parameters (skip if MultiGraph)
         self._weighted_results_df = self.compute_weighted_gt_metrics(graph_obj)
 
         if self.abort:
-            self.update_status(ProgressData(type="error", sender="GT",
-                                            message=f"Problem encountered while computing weighted GT parameters."))
+            self.update_status(
+                ProgressData(
+                    type="error",
+                    sender="GT",
+                    message="Problem encountered while computing weighted GT parameters.",
+                )
+            )
             return
 
         # 5. Generate results in PDF
@@ -219,7 +273,12 @@ class GraphAnalyzer(ProgressUpdate):
         # 6. Save GT compute metrics into props
         self.get_compute_props()
 
-    def compute_gt_metrics(self, graph: nx.Graph|None = None, save_histogram: bool = True, silent: bool = False) -> None|pd.DataFrame:
+    def compute_gt_metrics(
+        self,
+        graph: nx.Graph | None = None,
+        save_histogram: bool = True,
+        silent: bool = False,
+    ) -> None | pd.DataFrame:
         """
         Compute unweighted graph theory metrics.
 
@@ -234,7 +293,13 @@ class GraphAnalyzer(ProgressUpdate):
             return None
 
         if not silent:
-            self.update_status(ProgressData(percent=1, sender="GT", message=f"Performing un-weighted GT parameters..."))
+            self.update_status(
+                ProgressData(
+                    percent=1,
+                    sender="GT",
+                    message="Performing un-weighted GT parameters...",
+                )
+            )
 
         opt_gtc = self._configs
         data_dict = {"parameter": [], "value": []}
@@ -265,21 +330,31 @@ class GraphAnalyzer(ProgressUpdate):
         """
 
         # angle of edges (inbound and outbound)
-        angle_arr = np.array(list(nx.get_edge_attributes(graph, 'angle').values()))
-        data_dict["parameter"].append('Average edge angle (degrees)')
+        angle_arr = np.array(list(nx.get_edge_attributes(graph, "angle").values()))
+        data_dict["parameter"].append("Average edge angle (degrees)")
         data_dict["value"].append(round(np.average(angle_arr), 3))
-        data_dict["parameter"].append('Median edge angle (degrees)')
+        data_dict["parameter"].append("Median edge angle (degrees)")
         data_dict["value"].append(round(np.median(angle_arr), 3))
 
         if graph.number_of_nodes() <= 0:
             if not silent:
-                self.update_status(ProgressData(type="error", sender="GT", message=f"Problem with graph (change filter and graph options)."))
+                self.update_status(
+                    ProgressData(
+                        type="error",
+                        sender="GT",
+                        message="Problem with graph (change filter and graph options).",
+                    )
+                )
             return None
 
         # creating degree histogram
         if opt_gtc["display_degree_histogram"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=5, sender="GT", message=f"Computing graph degree..."))
+                self.update_status(
+                    ProgressData(
+                        percent=5, sender="GT", message="Computing graph degree..."
+                    )
+                )
             deg_distribution_1 = dict(nx.degree(graph))
             deg_distribution = np.array(list(deg_distribution_1.values()), dtype=float)
             if save_histogram:
@@ -289,7 +364,8 @@ class GraphAnalyzer(ProgressUpdate):
 
         is_connected = False
         if (opt_gtc["compute_network_diameter"]["value"] == 1) or (
-                opt_gtc["compute_avg_node_connectivity"]["value"] == 1):
+            opt_gtc["compute_avg_node_connectivity"]["value"] == 1
+        ):
             try:
                 is_connected = nx.is_connected(graph)
             except nx.exception.NetworkXPointlessConcept:
@@ -298,7 +374,11 @@ class GraphAnalyzer(ProgressUpdate):
         # calculating network diameter
         if opt_gtc["compute_network_diameter"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=10, sender="GT", message=f"Computing network diameter..."))
+                self.update_status(
+                    ProgressData(
+                        percent=10, sender="GT", message="Computing network diameter..."
+                    )
+                )
             if is_connected:
                 dia = int(diameter(graph))
             else:
@@ -310,10 +390,18 @@ class GraphAnalyzer(ProgressUpdate):
         if opt_gtc["compute_avg_node_connectivity"]["value"] == 1:
             if self.abort:
                 if not silent:
-                    self.update_status(ProgressData(type="error", sender="GT", message=f"Task aborted."))
+                    self.update_status(
+                        ProgressData(type="error", sender="GT", message="Task aborted.")
+                    )
                 return None
             if not silent:
-                self.update_status(ProgressData(percent=15, sender="GT", message=f"Computing node connectivity..."))
+                self.update_status(
+                    ProgressData(
+                        percent=15,
+                        sender="GT",
+                        message="Computing node connectivity...",
+                    )
+                )
             avg_node_con = self.compute_avg_node_connectivity(graph, is_connected)
             data_dict["parameter"].append("Average node connectivity")
             data_dict["value"].append(avg_node_con)
@@ -321,7 +409,11 @@ class GraphAnalyzer(ProgressUpdate):
         # calculating graph density
         if opt_gtc["compute_graph_density"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=20, sender="GT", message=f"Computing graph density..."))
+                self.update_status(
+                    ProgressData(
+                        percent=20, sender="GT", message="Computing graph density..."
+                    )
+                )
             g_density = nx.density(graph)
             g_density = round(g_density, 5)
             data_dict["parameter"].append("Graph density")
@@ -331,10 +423,18 @@ class GraphAnalyzer(ProgressUpdate):
         if opt_gtc["compute_global_efficiency"]["value"] == 1:
             if self.abort:
                 if not silent:
-                    self.update_status(ProgressData(type="error", sender="GT", message=f"Task aborted."))
+                    self.update_status(
+                        ProgressData(type="error", sender="GT", message="Task aborted.")
+                    )
                 return None
             if not silent:
-                self.update_status(ProgressData(percent=25, sender="GT", message=f"Computing global efficiency..."))
+                self.update_status(
+                    ProgressData(
+                        percent=25,
+                        sender="GT",
+                        message="Computing global efficiency...",
+                    )
+                )
             g_eff = global_efficiency(graph)
             g_eff = round(g_eff, 5)
             data_dict["parameter"].append("Global efficiency")
@@ -342,7 +442,11 @@ class GraphAnalyzer(ProgressUpdate):
 
         if opt_gtc["compute_wiener_index"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=30, sender="GT", message=f"Computing Wiener index..."))
+                self.update_status(
+                    ProgressData(
+                        percent=30, sender="GT", message="Computing Wiener index..."
+                    )
+                )
             # settings.update_label("Calculating w_index...")
             w_index = wiener_index(graph)
             w_index = round(w_index, 1)
@@ -352,7 +456,13 @@ class GraphAnalyzer(ProgressUpdate):
         # calculating assortativity coefficient
         if opt_gtc["compute_assortativity_coef"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=35, sender="GT", message=f"Computing assortativity coefficient..."))
+                self.update_status(
+                    ProgressData(
+                        percent=35,
+                        sender="GT",
+                        message="Computing assortativity coefficient...",
+                    )
+                )
             a_coef = degree_assortativity_coefficient(graph)
             a_coef = round(a_coef, 5)
             data_dict["parameter"].append("Assortativity coefficient")
@@ -361,7 +471,13 @@ class GraphAnalyzer(ProgressUpdate):
         # calculating clustering coefficients
         if opt_gtc["compute_avg_clustering_coef"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=40, sender="GT", message=f"Computing average clustering coefficient..."))
+                self.update_status(
+                    ProgressData(
+                        percent=40,
+                        sender="GT",
+                        message="Computing average clustering coefficient...",
+                    )
+                )
             coefficients_1 = clustering(graph)
             if isinstance(coefficients_1, dict):
                 cl_coefficients = np.array(list(coefficients_1.values()), dtype=float)
@@ -373,7 +489,13 @@ class GraphAnalyzer(ProgressUpdate):
         # calculating betweenness centrality histogram
         if opt_gtc["display_betweenness_centrality_histogram"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=45, sender="GT", message=f"Computing betweenness centrality..."))
+                self.update_status(
+                    ProgressData(
+                        percent=45,
+                        sender="GT",
+                        message="Computing betweenness centrality...",
+                    )
+                )
             b_distribution_1 = betweenness_centrality(graph)
             b_distribution = np.array(list(b_distribution_1.values()), dtype=float)
             if save_histogram:
@@ -384,7 +506,13 @@ class GraphAnalyzer(ProgressUpdate):
         # calculating eigenvector centrality
         if opt_gtc["display_eigenvector_centrality_histogram"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=50, sender="GT", message=f"Computing eigenvector centrality..."))
+                self.update_status(
+                    ProgressData(
+                        percent=50,
+                        sender="GT",
+                        message="Computing eigenvector centrality...",
+                    )
+                )
             try:
                 e_vecs_1 = eigenvector_centrality(graph, max_iter=100)
             except nx.exception.PowerIterationFailedConvergence:
@@ -398,9 +526,17 @@ class GraphAnalyzer(ProgressUpdate):
         # calculating closeness centrality
         if opt_gtc["display_closeness_centrality_histogram"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=55, sender="GT", message=f"Computing closeness centrality..."))
+                self.update_status(
+                    ProgressData(
+                        percent=55,
+                        sender="GT",
+                        message="Computing closeness centrality...",
+                    )
+                )
             close_distribution_1 = closeness_centrality(graph)
-            close_distribution = np.array(list(close_distribution_1.values()), dtype=float)
+            close_distribution = np.array(
+                list(close_distribution_1.values()), dtype=float
+            )
             if save_histogram:
                 self._histogram_data["closeness_distribution"] = close_distribution
             data_dict["parameter"].append("Average closeness centrality")
@@ -409,7 +545,11 @@ class GraphAnalyzer(ProgressUpdate):
         # calculating Ohms centrality
         if opt_gtc["display_ohms_histogram"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=60, sender="GT", message=f"Computing Ohms centrality..."))
+                self.update_status(
+                    ProgressData(
+                        percent=60, sender="GT", message="Computing Ohms centrality..."
+                    )
+                )
             o_distribution_1, res = self.compute_ohms_centrality(graph)
             o_distribution = np.array(list(o_distribution_1.values()), dtype=float)
             if save_histogram:
@@ -417,32 +557,47 @@ class GraphAnalyzer(ProgressUpdate):
             data_dict["parameter"].append("Average Ohms centrality")
             data_dict["value"].append(round(np.average(o_distribution), 5))
             data_dict["parameter"].append("Ohms centrality -- avg. area " + r"($m^2$)")
-            data_dict["value"].append(round(res['avg area'], 5))
+            data_dict["value"].append(round(res["avg area"], 5))
             data_dict["parameter"].append("Ohms centrality -- avg. length (m)")
-            data_dict["value"].append(round(res['avg length'], 5))
+            data_dict["value"].append(round(res["avg length"], 5))
             data_dict["parameter"].append("Ohms centrality -- avg. width (m)")
-            data_dict["value"].append(round(res['avg width'], 5))
+            data_dict["value"].append(round(res["avg width"], 5))
             data_dict["parameter"].append("Ohms centrality -- g shape coeff.")
-            data_dict["value"].append(round(res['g shape'], 5))
+            data_dict["value"].append(round(res["g shape"], 5))
             data_dict["parameter"].append("Ohms centrality -- conductivity (S/m)")
-            data_dict["value"].append(round(res['conductivity'], 5))
+            data_dict["value"].append(round(res["conductivity"], 5))
 
         # calculating persistent homology
         if opt_gtc["compute_persistent_homology"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=61, sender="GT", message="Computing persistent homology..."))
+                self.update_status(
+                    ProgressData(
+                        percent=61,
+                        sender="GT",
+                        message="Computing persistent homology...",
+                    )
+                )
             ph_dict, mt_dict = self.compute_persistent_homology(graph=graph)
             data_dict["parameter"].append("Persistent Homology--Critical Epsilon")
             data_dict["value"].append(round(mt_dict["critical_epsilon"], 5))
             data_dict["parameter"].append("Persistent Homology--Active Holes Count")
             data_dict["value"].append(mt_dict["active_holes_count"])
 
-            self._persistent_homology_data["persistent_homology"] = ph_dict["persistent_homology"]
-            self._persistent_homology_data["point_cloud_data"] = ph_dict["point_cloud_data"]
+            self._persistent_homology_data["persistent_homology"] = ph_dict[
+                "persistent_homology"
+            ]
+            self._persistent_homology_data["point_cloud_data"] = ph_dict[
+                "point_cloud_data"
+            ]
 
         return pd.DataFrame(data_dict)
 
-    def compute_weighted_gt_metrics(self, graph_obj: FiberNetworkBuilder|None = None, save_histogram: bool = True, silent: bool = False) -> None|pd.DataFrame:
+    def compute_weighted_gt_metrics(
+        self,
+        graph_obj: FiberNetworkBuilder | None = None,
+        save_histogram: bool = True,
+        silent: bool = False,
+    ) -> None | pd.DataFrame:
         """
         Compute weighted graph theory metrics.
 
@@ -459,7 +614,13 @@ class GraphAnalyzer(ProgressUpdate):
             return None
 
         if not silent:
-            self.update_status(ProgressData(percent=70, sender="GT", message=f"Performing weighted GT parameters..."))
+            self.update_status(
+                ProgressData(
+                    percent=70,
+                    sender="GT",
+                    message="Performing weighted GT parameters...",
+                )
+            )
 
         graph = graph_obj.nx_giant_graph
         opt_gtc = self._configs
@@ -472,13 +633,25 @@ class GraphAnalyzer(ProgressUpdate):
 
         if graph.number_of_nodes() <= 0:
             if not silent:
-                self.update_status(ProgressData(type="error", sender="GT", message=f"Problem with graph (change filter and graph options)."))
+                self.update_status(
+                    ProgressData(
+                        type="error",
+                        sender="GT",
+                        message="Problem with graph (change filter and graph options).",
+                    )
+                )
             return None
 
         if opt_gtc["display_degree_histogram"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=72, sender="GT", message=f"Computing weighted degree histogram..."))
-            deg_distribution_1 = dict(nx.degree(graph, weight='weight'))
+                self.update_status(
+                    ProgressData(
+                        percent=72,
+                        sender="GT",
+                        message="Computing weighted degree histogram...",
+                    )
+                )
+            deg_distribution_1 = dict(nx.degree(graph, weight="weight"))
             deg_distribution = np.array(list(deg_distribution_1.values()), dtype=float)
             if save_histogram:
                 self._histogram_data["weighted_degree_distribution"] = deg_distribution
@@ -487,25 +660,38 @@ class GraphAnalyzer(ProgressUpdate):
 
         if opt_gtc["compute_wiener_index"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=74, sender="GT", message=f"Computing weighted Wiener index..."))
-            w_index = wiener_index(graph, weight='length')
+                self.update_status(
+                    ProgressData(
+                        percent=74,
+                        sender="GT",
+                        message="Computing weighted Wiener index...",
+                    )
+                )
+            w_index = wiener_index(graph, weight="length")
             w_index = round(w_index, 1)
             data_dict["parameter"].append("Length-weighted Wiener Index")
             data_dict["value"].append(w_index)
 
         if opt_gtc["compute_avg_node_connectivity"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=76, sender="GT", message=f"Computing weighted average node connectivity..."))
+                self.update_status(
+                    ProgressData(
+                        percent=76,
+                        sender="GT",
+                        message="Computing weighted average node connectivity...",
+                    )
+                )
             connected_graph = nx.is_connected(graph)
             if connected_graph:
                 max_flow = float(0)
                 p = periphery(graph)
                 q = len(p) - 1
-                for s in range(0, q - 1):
+                for s in range(q - 1):
                     for t in range(s + 1, q):
-                        flow_value = maximum_flow(graph, p[s], p[t], capacity='weight')[0]
-                        if flow_value > max_flow:
-                            max_flow = flow_value
+                        flow_value = maximum_flow(graph, p[s], p[t], capacity="weight")[
+                            0
+                        ]
+                        max_flow = max(max_flow, flow_value)
                 max_flow = round(max_flow, 5)
             else:
                 max_flow = np.nan
@@ -514,66 +700,116 @@ class GraphAnalyzer(ProgressUpdate):
 
         if opt_gtc["compute_assortativity_coef"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=78, sender="GT", message=f"Computing weighted assortativity coefficient..."))
-            a_coef = degree_assortativity_coefficient(graph, weight='width')
+                self.update_status(
+                    ProgressData(
+                        percent=78,
+                        sender="GT",
+                        message="Computing weighted assortativity coefficient...",
+                    )
+                )
+            a_coef = degree_assortativity_coefficient(graph, weight="width")
             a_coef = round(a_coef, 5)
             data_dict["parameter"].append("Width-weighted assortativity coefficient")
             data_dict["value"].append(a_coef)
 
         if opt_gtc["display_betweenness_centrality_histogram"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=80, sender="GT", message=f"Computing weighted betweenness centrality..."))
-            b_distribution_1 = betweenness_centrality(graph, weight='weight')
+                self.update_status(
+                    ProgressData(
+                        percent=80,
+                        sender="GT",
+                        message="Computing weighted betweenness centrality...",
+                    )
+                )
+            b_distribution_1 = betweenness_centrality(graph, weight="weight")
             b_distribution = np.array(list(b_distribution_1.values()), dtype=float)
             if save_histogram:
-                self._histogram_data["weighted_betweenness_distribution"] = b_distribution
-            data_dict["parameter"].append(f"{weight_type}-weighted betweenness centrality")
+                self._histogram_data["weighted_betweenness_distribution"] = (
+                    b_distribution
+                )
+            data_dict["parameter"].append(
+                f"{weight_type}-weighted betweenness centrality"
+            )
             data_dict["value"].append(round(np.average(b_distribution), 5))
 
         if opt_gtc["display_closeness_centrality_histogram"]["value"] == 1:
             if not silent:
-                self.update_status(ProgressData(percent=82, sender="GT", message=f"Computing weighted closeness centrality..."))
-            close_distribution_1 = closeness_centrality(graph, distance='length')
-            close_distribution = np.array(list(close_distribution_1.values()), dtype=float)
+                self.update_status(
+                    ProgressData(
+                        percent=82,
+                        sender="GT",
+                        message="Computing weighted closeness centrality...",
+                    )
+                )
+            close_distribution_1 = closeness_centrality(graph, distance="length")
+            close_distribution = np.array(
+                list(close_distribution_1.values()), dtype=float
+            )
             if save_histogram:
-                self._histogram_data["weighted_closeness_distribution"] = close_distribution
-            data_dict["parameter"].append(f"Length-weighted average closeness centrality")
+                self._histogram_data["weighted_closeness_distribution"] = (
+                    close_distribution
+                )
+            data_dict["parameter"].append(
+                "Length-weighted average closeness centrality"
+            )
             data_dict["value"].append(round(np.average(close_distribution), 5))
 
         if opt_gtc["display_eigenvector_centrality_histogram"]["value"] == 1:
             if self.abort:
                 if not silent:
-                    self.update_status(ProgressData(type="error", sender="GT", message=f"Task aborted."))
+                    self.update_status(
+                        ProgressData(type="error", sender="GT", message="Task aborted.")
+                    )
                 return None
             if not silent:
-                self.update_status(ProgressData(percent=84, sender="GT", message=f"Computing weighted eigenvector centrality..."))
+                self.update_status(
+                    ProgressData(
+                        percent=84,
+                        sender="GT",
+                        message="Computing weighted eigenvector centrality...",
+                    )
+                )
             try:
-                e_vecs_1 = eigenvector_centrality(graph, max_iter=100, weight='weight')
+                e_vecs_1 = eigenvector_centrality(graph, max_iter=100, weight="weight")
             except nx.exception.PowerIterationFailedConvergence:
-                e_vecs_1 = eigenvector_centrality(graph, max_iter=10000, weight='weight')
+                e_vecs_1 = eigenvector_centrality(
+                    graph, max_iter=10000, weight="weight"
+                )
             e_vecs = np.array(list(e_vecs_1.values()), dtype=float)
             if save_histogram:
                 self._histogram_data["weighted_eigenvector_distribution"] = e_vecs
-            data_dict["parameter"].append(f"{weight_type}-weighted average eigenvector centrality")
+            data_dict["parameter"].append(
+                f"{weight_type}-weighted average eigenvector centrality"
+            )
             data_dict["value"].append(round(np.average(e_vecs), 5))
 
         # calculate cross-sectional area of edges
         wt_type = graph_obj.get_weight_type()
-        if wt_type == 'AREA':
+        if wt_type == "AREA":
             if not silent:
-                self.update_status(ProgressData(percent=88, sender="GT", message=f"Computing weighted average (edge) cross-sectional area..."))
+                self.update_status(
+                    ProgressData(
+                        percent=88,
+                        sender="GT",
+                        message="Computing weighted average (edge) cross-sectional area...",
+                    )
+                )
             temp_distribution = []
-            for (s, e) in graph.edges():
-                temp_distribution.append(graph[s][e]['weight'])
+            for s, e in graph.edges():
+                temp_distribution.append(graph[s][e]["weight"])
             a_distribution = np.array(temp_distribution, dtype=float)
             ae_val = np.average(a_distribution)
             ae_val = round(ae_val, 5)
-            data_dict["parameter"].append(f"Average edge cross-sectional area (nm\u00b2)")
+            data_dict["parameter"].append(
+                "Average edge cross-sectional area (nm\u00b2)"
+            )
             data_dict["value"].append(ae_val)
 
         return pd.DataFrame(data_dict)
 
-    def compute_persistent_homology(self, graph: nx.Graph | None = None, silent: bool = False) -> tuple[dict[str, list|np.ndarray|None], dict[str, float]]:
+    def compute_persistent_homology(
+        self, graph: nx.Graph | None = None, silent: bool = False
+    ) -> tuple[dict[str, list | np.ndarray | None], dict[str, float]]:
         """
         Persistent homology is a method in TDA (Topological Data Analysis) that tries to identify topological features
         (i.e., holes, connected components) which do not change in point cloud data during construction of various
@@ -659,8 +895,9 @@ class GraphAnalyzer(ProgressUpdate):
 
             # 1. Extract all finite death values for Dimension 0 (Connected Components)
             h0_deaths = [
-                death for dim, (birth, death) in ph_data
-                if dim == 0 and death != float('inf') and np.isfinite(death)
+                death
+                for dim, (birth, death) in ph_data
+                if dim == 0 and death != float("inf") and np.isfinite(death)
             ]
 
             if not h0_deaths:
@@ -672,28 +909,39 @@ class GraphAnalyzer(ProgressUpdate):
             # 2. Count the number of Dimension 1 holes alive at this critical scale
             # A hole is alive if: Birth <= critical_epsilon < Death
             active_holes_count = sum(
-                1 for dim, (birth, death) in ph_data
+                1
+                for dim, (birth, death) in ph_data
                 if dim == 1 and birth <= critical_epsilon < death
             )
 
             return {
                 "critical_epsilon": critical_epsilon,
-                "active_holes_count": active_holes_count
+                "active_holes_count": active_holes_count,
             }
 
-        res_dict: dict[str, list|np.ndarray|None] = { "persistent_homology": None, "point_cloud_data": None}
-        metric_dict: dict[str, float] = { "critical_epsilon": 0.0, "active_holes_count": 0.0 }
+        res_dict: dict[str, list | np.ndarray | None] = {
+            "persistent_homology": None,
+            "point_cloud_data": None,
+        }
+        metric_dict: dict[str, float] = {
+            "critical_epsilon": 0.0,
+            "active_holes_count": 0.0,
+        }
 
         if graph is None:
             return res_dict, metric_dict
 
         if not silent:
-            self.update_status(ProgressData(type='info', sender="GT", message="Computing persistent homology..."))
+            self.update_status(
+                ProgressData(
+                    type="info", sender="GT", message="Computing persistent homology..."
+                )
+            )
 
         # 1. Safely extract positions to form pure point cloud data from nodes
         try:
             node_list = list(graph.nodes())
-            pos = {i: graph.nodes[i]['o'] for i in node_list}
+            pos = {i: graph.nodes[i]["o"] for i in node_list}
 
             # Convert node coordinates into a standard NumPy array (Pure Point Cloud)
             sorted_nodes = sorted(graph.nodes())
@@ -708,7 +956,9 @@ class GraphAnalyzer(ProgressUpdate):
             rips_complex = gudhi.RipsComplex(points=point_cloud)
 
             # Create the simplex tree up to dimension 2 (0 = components, 1 = holes, 2 = filled triangles)
-            simplex_tree = rips_complex.create_simplex_tree(max_dimension=2)  # Dimension 2: Triangles (Solid faces connecting 3 points)
+            simplex_tree = rips_complex.create_simplex_tree(
+                max_dimension=2
+            )  # Dimension 2: Triangles (Solid faces connecting 3 points)
 
             # 3. Compute Persistent Homology
             persistence_data = simplex_tree.persistence()
@@ -730,12 +980,20 @@ class GraphAnalyzer(ProgressUpdate):
         storing the results in a dictionary for further processing or visualization.
         """
 
-        self.update_status(ProgressData(percent=65, sender="GT", message=f"Computing scaling behaviour..."))
+        self.update_status(
+            ProgressData(
+                percent=65, sender="GT", message="Computing scaling behaviour..."
+            )
+        )
         self._ntwk_p.add_listener(self.track_img_progress)
         num_filters = int(self._configs["scaling_behavior_kernel_count"]["value"])
         num_patches = int(self._configs["scaling_behavior_patches_per_kernel"]["value"])
         calc_avg = self._configs["scaling_behavior_compute_avg"]["value"]
-        graph_groups = self._ntwk_p.build_graph_from_patches(num_kernels=num_filters, patch_count_per_kernel=num_patches, compute_avg=calc_avg)
+        graph_groups = self._ntwk_p.build_graph_from_patches(
+            num_kernels=num_filters,
+            patch_count_per_kernel=num_patches,
+            compute_avg=calc_avg,
+        )
         self._ntwk_p.remove_listener(self.track_img_progress)
 
         sorted_plt_data = defaultdict(lambda: defaultdict(list))
@@ -743,27 +1001,41 @@ class GraphAnalyzer(ProgressUpdate):
         for (h, w), nx_graphs in graph_groups.items():
             num_graphs = len(nx_graphs)
             for i, nx_graph in enumerate(nx_graphs):
-                self.update_status(ProgressData(type="warning", sender="GT", message=f"Computing GT parameters for filter {h}x{w}: graph-patch {i + 1}/{num_graphs}..."))
-                temp_df = self.compute_gt_metrics(nx_graph, save_histogram=False, silent=True)
+                self.update_status(
+                    ProgressData(
+                        type="warning",
+                        sender="GT",
+                        message=f"Computing GT parameters for filter {h}x{w}: graph-patch {i + 1}/{num_graphs}...",
+                    )
+                )
+                temp_df = self.compute_gt_metrics(
+                    nx_graph, save_histogram=False, silent=True
+                )
                 if temp_df is None:
                     # Skip the problematic graph
                     continue
                 for _, row in temp_df.iterrows():
                     x_param = row["parameter"]
                     y_value = row["value"]
-                    if ' edge angle' in x_param:  # Skip this
+                    if " edge angle" in x_param:  # Skip this
                         continue
-                    sorted_plt_data[x_param][h].append(y_value) if num_graphs > 4 else None
+                    sorted_plt_data[x_param][h].append(
+                        y_value
+                    ) if num_graphs > 4 else None
 
                 # Save GT parameters/descriptors of 90% image to DF
                 if num_graphs > 4:
                     continue
                 else:
-                    temp_df = temp_df.rename(columns={'value': f'value-{i + 1}'})
+                    temp_df = temp_df.rename(columns={"value": f"value-{i + 1}"})
                     if i == 0:
                         avg_df = temp_df
                     else:
-                        avg_df = avg_df.merge(temp_df, on='parameter') if avg_df is not None else temp_df
+                        avg_df = (
+                            avg_df.merge(temp_df, on="parameter")
+                            if avg_df is not None
+                            else temp_df
+                        )
 
         # Add average to scaling results (for the Excel file)
         if avg_df is not None:
@@ -771,7 +1043,9 @@ class GraphAnalyzer(ProgressUpdate):
 
         return sorted_plt_data
 
-    def compute_ohms_centrality(self, nx_graph: nx.Graph) -> tuple[dict, dict] | tuple[None, None]:
+    def compute_ohms_centrality(
+        self, nx_graph: nx.Graph
+    ) -> tuple[dict, dict] | tuple[None, None]:
         r"""
         Computes Ohms centrality value for each node based on actual pixel width and length of edges in meters.
 
@@ -806,9 +1080,9 @@ class GraphAnalyzer(ProgressUpdate):
                 connected_nodes = nx_graph[n]  # all nodes connected to node n
                 arr_len = []
                 arr_dia = []
-                for idx, val in connected_nodes.items():
-                    arr_len.append(val['length'])
-                    arr_dia.append(val['width'])
+                for val in connected_nodes.values():
+                    arr_len.append(val["length"])
+                    arr_dia.append(val["width"])
                 arr_len = np.array(arr_len, dtype=float)
                 arr_dia = np.array(arr_dia, dtype=float)
 
@@ -818,7 +1092,7 @@ class GraphAnalyzer(ProgressUpdate):
                 width = pix_width * pixel_dim
                 # area = math.pi * 89.6 * (width * 0.5) ** 2
                 area = g_shape * (width * width)
-                ohms_val = ((b_val * length * rho_dim) / area)
+                ohms_val = (b_val * length * rho_dim) / area
                 lst_len.append(length)
                 lst_area.append(area)
                 lst_width.append(width)
@@ -831,14 +1105,21 @@ class GraphAnalyzer(ProgressUpdate):
         avg_width = np.average(np.array(lst_width, dtype=float))
         med_width = np.median(np.array(lst_width, dtype=float))
         res = {
-            'avg area': avg_area, 'med area': med_area,
-            'avg length': avg_len, 'med length': med_len,
-            'avg width': avg_width, 'med width': med_width,
-            'g shape': g_shape, 'conductivity': (1 / rho_dim)}
+            "avg area": avg_area,
+            "med area": med_area,
+            "avg length": avg_len,
+            "med length": med_len,
+            "avg width": avg_width,
+            "med width": med_width,
+            "g shape": g_shape,
+            "conductivity": (1 / rho_dim),
+        }
 
         return ohms_dict, res
 
-    def compute_avg_node_connectivity(self, nx_graph: nx.Graph, is_graph_connected=False) -> float:
+    def compute_avg_node_connectivity(
+        self, nx_graph: nx.Graph, is_graph_connected=False
+    ) -> float:
         r"""Returns the average connectivity of a graph G.
 
         The average connectivity `\bar{\kappa}` of a graph G is the average
@@ -861,11 +1142,19 @@ class GraphAnalyzer(ProgressUpdate):
             total, count = 0, 0
             with multiprocessing.Pool() as pool:
                 # Prepare all node pairs (i < j)
-                items = [(ig_graph, i, j) for i in range(num_nodes) for j in range(i + 1, num_nodes)]
+                items = [
+                    (ig_graph, i, j)
+                    for i in range(num_nodes)
+                    for j in range(i + 1, num_nodes)
+                ]
                 async_result = pool.starmap_async(_worker_vertex_connectivity, items)
                 for n in async_result.get():
                     if self.abort:
-                        self.update_status(ProgressData(type="error", sender="GT", message=f"Task aborted."))
+                        self.update_status(
+                            ProgressData(
+                                type="error", sender="GT", message="Task aborted."
+                            )
+                        )
                         pool.terminate()
                         pool.join()
                         return 0
@@ -885,7 +1174,9 @@ class GraphAnalyzer(ProgressUpdate):
             from .c_lang import sgt_c_module as sgt
 
             cpu_count = get_num_cores()
-            num_threads = cpu_count if nx.number_of_nodes(nx_graph) < 2000 else cpu_count * 2
+            num_threads = (
+                cpu_count if nx.number_of_nodes(nx_graph) < 2000 else cpu_count * 2
+            )
             anc = 0
 
             try:
@@ -895,21 +1186,31 @@ class GraphAnalyzer(ProgressUpdate):
                 nx.write_edgelist(nx_graph, graph_file, data=False)
                 anc = sgt.compute_anc(graph_file, num_threads, self._allow_mp)
             except Exception as err:
-                logging.exception("Computing ANC Error: %s", err, extra={'user': 'SGT Logs'})
+                logging.exception(
+                    "Computing ANC Error: %s", err, extra={"user": "SGT Logs"}
+                )
             return anc
 
         if is_graph_connected:
             # use_igraph = opt_gtc["computing_lang == 'C'"]["value"]
             if self._use_igraph:
                 # use iGraph Lib in C
-                self.update_status(ProgressData(percent=15, sender="GT", message=f"Using iGraph library..."))
+                self.update_status(
+                    ProgressData(
+                        percent=15, sender="GT", message="Using iGraph library..."
+                    )
+                )
                 try:
                     avg_node_con = igraph_clang_average_node_connectivity()
                 except ImportError:
                     avg_node_con = igraph_average_node_connectivity()
             else:
                 # Use NetworkX Lib in Python
-                self.update_status(ProgressData(percent=15, sender="GT", message=f"Using NetworkX library..."))
+                self.update_status(
+                    ProgressData(
+                        percent=15, sender="GT", message="Using NetworkX library..."
+                    )
+                )
                 avg_node_con = average_node_connectivity(nx_graph)
             avg_node_con = round(avg_node_con, 5)
         else:
@@ -939,7 +1240,11 @@ class GraphAnalyzer(ProgressUpdate):
         :param graph_obj: Graph Extractor object.
 
         """
-        self.update_status(ProgressData(type="warning", sender="GT", message=f"Computing graph conductance..."))
+        self.update_status(
+            ProgressData(
+                type="warning", sender="GT", message="Computing graph conductance..."
+            )
+        )
         # Make a copy of the graph
         graph = graph_obj.nx_giant_graph.copy()
         weighted = graph_obj.configs["has_weights"]["value"]
@@ -975,10 +1280,14 @@ class GraphAnalyzer(ProgressUpdate):
 
         # 4. Compute normalized-laplacian matrix
         if weighted:
-            norm_laplacian_matrix = nx.normalized_laplacian_matrix(giant_graph, weight='weight').toarray()
+            norm_laplacian_matrix = nx.normalized_laplacian_matrix(
+                giant_graph, weight="weight"
+            ).toarray()
         else:
             # norm_laplacian_matrix = compute_norm_laplacian_matrix(giant_graph)
-            norm_laplacian_matrix = nx.normalized_laplacian_matrix(giant_graph).toarray()
+            norm_laplacian_matrix = nx.normalized_laplacian_matrix(
+                giant_graph
+            ).toarray()
 
         # 5. Compute eigenvalues
         # e_vals, _ = xp.linalg.eig(norm_laplacian_matrix)
@@ -991,7 +1300,7 @@ class GraphAnalyzer(ProgressUpdate):
         # approximate conductance using the 2nd smallest eigenvalue
         try:
             # Maximum Conductance
-            val_max = math.sqrt((2 * sorted_vals[1]))
+            val_max = math.sqrt(2 * sorted_vals[1])
         except ValueError:
             val_max = np.nan
         # Minimum Graph Conductance
@@ -1036,7 +1345,7 @@ class GraphAnalyzer(ProgressUpdate):
         if self._results_df is None:
             return
         param_df = self._results_df.copy()
-        self._props.append(['UN-WEIGHTED', 'PARAMETERS'])
+        self._props.append(["UN-WEIGHTED", "PARAMETERS"])
         for _, row in param_df.iterrows():
             x_param = row["parameter"]
             y_value = row["value"]
@@ -1046,13 +1355,15 @@ class GraphAnalyzer(ProgressUpdate):
         if self._weighted_results_df is None:
             return
         param_df = self._weighted_results_df.copy()
-        self._props.append(['WEIGHTED', 'PARAMETERS'])
+        self._props.append(["WEIGHTED", "PARAMETERS"])
         for _, row in param_df.iterrows():
             x_param = row["parameter"]
             y_value = row["value"]
             self._props.append([x_param, y_value])
 
-    def generate_pdf_output(self, graph_obj: FiberNetworkBuilder, scaling_data=None) -> list[plt.Figure]:
+    def generate_pdf_output(
+        self, graph_obj: FiberNetworkBuilder, scaling_data=None
+    ) -> list[plt.Figure]:
         """
         Generate results as graphs and plots which should be written in a PDF file.
 
@@ -1062,7 +1373,9 @@ class GraphAnalyzer(ProgressUpdate):
         :return: List of results.
         """
 
-        self.update_status(ProgressData(percent=90, sender="GT", message=f"Writing results to PDF..."))
+        self.update_status(
+            ProgressData(percent=90, sender="GT", message="Writing results to PDF...")
+        )
         opt_gtc = self._configs
         out_figs = []
 
@@ -1086,7 +1399,13 @@ class GraphAnalyzer(ProgressUpdate):
                 ax = plt_fig.add_subplot(1, 1, 1)
                 ax.set_axis_off()
                 ax.set_title("Unweighted GT parameters")
-                tab_1 = tbl.table(ax, cellText=data.values[:, :], loc='upper center', colWidths=col_width, cellLoc='left')
+                tab_1 = tbl.table(
+                    ax,
+                    cellText=data.values[:, :],
+                    loc="upper center",
+                    colWidths=col_width,
+                    cellLoc="left",
+                )
                 tab_1.scale(1, 1.5)
             else:
                 plt_fig = None
@@ -1099,8 +1418,13 @@ class GraphAnalyzer(ProgressUpdate):
                 ax = plt_fig_wt.add_subplot(1, 1, 1)
                 ax.set_axis_off()
                 ax.set_title("Weighted GT parameters")
-                tab_2 = tbl.table(ax, cellText=w_data.values[:, :], loc='upper center', colWidths=col_width,
-                                  cellLoc='left')
+                tab_2 = tbl.table(
+                    ax,
+                    cellText=w_data.values[:, :],
+                    loc="upper center",
+                    colWidths=col_width,
+                    cellLoc="left",
+                )
                 tab_2.scale(1, 1.5)
             else:
                 plt_fig_wt = None
@@ -1114,7 +1438,7 @@ class GraphAnalyzer(ProgressUpdate):
             """
 
             plt_figs = []
-            is_3d = True if len(sel_images) > 1 else False
+            is_3d = len(sel_images) > 1
 
             for i, img in enumerate(sel_images):
                 raw_img = img.img_2d
@@ -1127,20 +1451,30 @@ class GraphAnalyzer(ProgressUpdate):
                 ax_3 = plt_fig.add_subplot(2, 2, 3)
                 ax_4 = plt_fig.add_subplot(2, 2, 4)
 
-                ax_1.set_title(f"Frame {i}: Original Image") if is_3d else ax_1.set_title(f"Original Image")
+                ax_1.set_title(
+                    f"Frame {i}: Original Image"
+                ) if is_3d else ax_1.set_title("Original Image")
                 ax_1.set_axis_off()
-                ax_1.imshow(raw_img, cmap='gray')
+                ax_1.imshow(raw_img, cmap="gray")
 
-                ax_2.set_title(f"Frame {i}: Grayscale Image") if is_3d else ax_2.set_title(f"Grayscale Image")
+                ax_2.set_title(
+                    f"Frame {i}: Grayscale Image"
+                ) if is_3d else ax_2.set_title("Grayscale Image")
                 ax_2.set_axis_off()
-                ax_2.imshow(img_gray, cmap='gray')
+                ax_2.imshow(img_gray, cmap="gray")
 
-                ax_3.set_title(f"Frame {i}: Binary Image") if is_3d else ax_3.set_title(f"Binary Image")
+                ax_3.set_title(f"Frame {i}: Binary Image") if is_3d else ax_3.set_title(
+                    "Binary Image"
+                )
                 ax_3.set_axis_off()
-                ax_3.imshow(img_bin, cmap='gray')
+                ax_3.imshow(img_bin, cmap="gray")
 
                 img.plot_img_histogram(axes=ax_4)
-                hist_title = f"Frame {i}: Histogram of Grayscale Image" if is_3d else f"Histogram of Grayscale Image"
+                hist_title = (
+                    f"Frame {i}: Histogram of Grayscale Image"
+                    if is_3d
+                    else "Histogram of Grayscale Image"
+                )
                 ax_4.set_title(hist_title)
 
                 plt_figs.append(plt_fig)
@@ -1164,10 +1498,14 @@ class GraphAnalyzer(ProgressUpdate):
 
             run_info = ""
             run_info += filename + "\n"
-            run_info += now.strftime("%Y-%m-%d %H:%M:%S") + "\n----------------------------\n\n"
+            run_info += (
+                now.strftime("%Y-%m-%d %H:%M:%S") + "\n----------------------------\n\n"
+            )
 
             # Image Configs
-            run_info += self._ntwk_p.image_obj.get_config_info()  # Get configs of first image
+            run_info += (
+                self._ntwk_p.image_obj.get_config_info()
+            )  # Get configs of first image
             run_info += "\n\n"
 
             # Graph Configs
@@ -1178,7 +1516,13 @@ class GraphAnalyzer(ProgressUpdate):
             run_info += self.get_config_info()
             run_info += "\n\n"
 
-            ax.text(0.5, 0.5, run_info, horizontalalignment='center', verticalalignment='center')
+            ax.text(
+                0.5,
+                0.5,
+                run_info,
+                horizontalalignment="center",
+                verticalalignment="center",
+            )
             return plt_fig
 
         def plot_scaling_behavior():
@@ -1189,10 +1533,21 @@ class GraphAnalyzer(ProgressUpdate):
                 subplot_num += 1
                 axis = plt_fig.add_subplot(2, 2, subplot_num)
                 if plot_err:
-                    axis.errorbar(x_avg, y_avg, xerr=x_err, yerr=y_err, label='Data', color='b', capsize=4, marker='s',
-                                  markersize=4, linewidth=1, linestyle='-')
+                    axis.errorbar(
+                        x_avg,
+                        y_avg,
+                        xerr=x_err,
+                        yerr=y_err,
+                        label="Data",
+                        color="b",
+                        capsize=4,
+                        marker="s",
+                        markersize=4,
+                        linewidth=1,
+                        linestyle="-",
+                    )
                 axis.set_title(f"{plt_type}\nNodes vs {y_title}", fontsize=10)
-                axis.set(xlabel='No. of Nodes', ylabel=f'{param_name}')
+                axis.set(xlabel="No. of Nodes", ylabel=f"{param_name}")
                 # axis.legend()
                 return axis, subplot_num
 
@@ -1202,20 +1557,28 @@ class GraphAnalyzer(ProgressUpdate):
                 return plt_figs
 
             # Plot scaling behavior
-            self.update_status(ProgressData(percent=91, sender="GT", message=f"Plotting scaling behavior..."))
+            self.update_status(
+                ProgressData(
+                    percent=91, sender="GT", message="Plotting scaling behavior..."
+                )
+            )
             i = 0
             x_label, best_scale = None, None
             y_title = ""
-            x_values, x_avg, x_err, x_fit = None, None, None, None
+            _x_values, x_avg, x_err, x_fit = None, None, None, None
             data_df, fit_data_df = None, None
             plt_fig = plt.Figure(figsize=(8.5, 11), dpi=300)
             for param_name, plt_dict in scaling_data.items():
                 # axis title name
-                y_title = param_name.split('(')[0] if '(' in param_name else param_name
+                y_title = param_name.split("(")[0] if "(" in param_name else param_name
 
                 # Retrieve plot data
-                kernel_dims = np.array(sorted(plt_dict.keys()))  # Optional: sort heights and save as a numpy array
-                y_lst = [plt_dict[d] for d in kernel_dims]  # shape: (n_samples, n_kernels)
+                kernel_dims = np.array(
+                    sorted(plt_dict.keys())
+                )  # Optional: sort heights and save as a numpy array
+                y_lst = [
+                    plt_dict[d] for d in kernel_dims
+                ]  # shape: (n_samples, n_kernels)
 
                 # Pad with NaN
                 max_len = max(len(row) for row in y_lst)
@@ -1224,7 +1587,9 @@ class GraphAnalyzer(ProgressUpdate):
                 # Convert to a Numpy array
                 y_values: np.ndarray = np.array(padded_lst).T
                 y_avg: np.ndarray = np.nanmean(y_values, axis=0)
-                y_err: np.ndarray = np.nanstd(y_values, axis=0, ddof=1) / np.sqrt(y_values.shape[0])
+                y_err: np.ndarray = np.nanstd(y_values, axis=0, ddof=1) / np.sqrt(
+                    y_values.shape[0]
+                )
                 if np.any(np.isnan(y_avg)):
                     # print(f"{param_name} has NaN values: {y_avg}")
                     continue
@@ -1248,33 +1613,69 @@ class GraphAnalyzer(ProgressUpdate):
                         # Plot for each Parameter?
                         ax, i = plot_axis(i, "", plot_err=False)
                         ax.set_title(f"Kernel Size vs {y_title}", fontsize=10)
-                        ax.set(xlabel='Kernel Size', ylabel=y_title)
-                        ax.errorbar(kernel_dims, y_avg, yerr=y_err, label='Data', color='b', capsize=4, marker='s',
-                                    markersize=4, linewidth=1, linestyle='-')
+                        ax.set(xlabel="Kernel Size", ylabel=y_title)
+                        ax.errorbar(
+                            kernel_dims,
+                            y_avg,
+                            yerr=y_err,
+                            label="Data",
+                            color="b",
+                            capsize=4,
+                            marker="s",
+                            markersize=4,
+                            linewidth=1,
+                            linestyle="-",
+                        )
 
                         # b) Log-log plot of Kernel-size vs. Node-count
                         log_x = np.log10(kernel_dims)
                         log_y = np.log10(y_avg)
-                        slope, intercept, r_value, p_value, std_err = sp.stats.linregress(log_x, log_y)
-                        log_y_fit = slope * log_x + intercept  # Compute line of best-fit
+                        slope, intercept, r_value, p_value, std_err = (
+                            sp.stats.linregress(log_x, log_y)
+                        )
+                        log_y_fit = (
+                            slope * log_x + intercept
+                        )  # Compute line of best-fit
 
-                        ax = plt_fig.add_subplot(2, 2, i+1)
-                        ax.set_title(f"Log-Log Plot of\nKernel Size vs {y_title}", fontsize=10)
-                        ax.set(xlabel='Kernel Size', ylabel=y_title)
-                        ax.plot(log_x, log_y, label='Data', color='b', marker='s', markersize=3)
-                        ax.plot(log_x, log_y_fit, label=f'Fit: slope={slope:.2f}, $R^2$={r_value ** 2:.3f}', color='r')
+                        ax = plt_fig.add_subplot(2, 2, i + 1)
+                        ax.set_title(
+                            f"Log-Log Plot of\nKernel Size vs {y_title}", fontsize=10
+                        )
+                        ax.set(xlabel="Kernel Size", ylabel=y_title)
+                        ax.plot(
+                            log_x,
+                            log_y,
+                            label="Data",
+                            color="b",
+                            marker="s",
+                            markersize=3,
+                        )
+                        ax.plot(
+                            log_x,
+                            log_y_fit,
+                            label=f"Fit: slope={slope:.2f}, $R^2$={r_value**2:.3f}",
+                            color="r",
+                        )
                         ax.legend()
 
                         plt_figs.append(plt_fig)
                     except Exception as e:
-                        logging.exception("Scaling Law (Kernel-Nodes) Error: %s", e, extra={'user': 'SGT Logs'})
+                        logging.exception(
+                            "Scaling Law (Kernel-Nodes) Error: %s",
+                            e,
+                            extra={"user": "SGT Logs"},
+                        )
 
                     # Write to DataFrame
-                    data_df = pd.DataFrame({'kernel-dim': kernel_dims, 'x-avg': x_avg, 'x-std': x_err})
-                    fit_data_df = pd.DataFrame({'x-fit': x_fit})
+                    data_df = pd.DataFrame(
+                        {"kernel-dim": kernel_dims, "x-avg": x_avg, "x-std": x_err}
+                    )
+                    fit_data_df = pd.DataFrame({"x-fit": x_fit})
 
                     # Add Kernel DataFrame (with BestScale at the last row)
-                    kernel_df = pd.DataFrame({'kernel-dim': kernel_dims, 'x-avg': x_avg, 'x-std': x_err})
+                    kernel_df = pd.DataFrame(
+                        {"kernel-dim": kernel_dims, "x-avg": x_avg, "x-std": x_err}
+                    )
                     # new_row = pd.DataFrame([{'kernel-dim': best_scale, 'x-avg': 0.0, 'x-std': 0.0}])
                     # kernel_df = pd.concat([kernel_df, new_row], ignore_index=True)  # Add as last row
                     self._scaling_results["Nodes-Kernel Size"] = kernel_df.copy()
@@ -1286,112 +1687,193 @@ class GraphAnalyzer(ProgressUpdate):
                         log_y = np.log10(y_avg)
 
                         # 2. Perform linear regression in log-log scale
-                        slope, intercept, r_value, p_value, std_err = sp.stats.linregress(log_x, log_y)
-                        log_y_fit = slope * log_x + intercept  # Compute line of best-fit
+                        slope, intercept, r_value, _p_value, _std_err = (
+                            sp.stats.linregress(log_x, log_y)
+                        )
+                        log_y_fit = (
+                            slope * log_x + intercept
+                        )  # Compute line of best-fit
 
                         # 3. Plot data (Log-Log scale with the line best-fit)
                         ax, i = plot_axis(i, "Log-Log Plot of", plot_err=False)
-                        ax.plot(log_x, log_y, label='Data', color='b', marker='s', markersize=3)
-                        ax.plot(log_x, log_y_fit, label=f'Fit: slope={slope:.2f}, $R^2$={r_value ** 2:.3f}', color='r')
+                        ax.plot(
+                            log_x,
+                            log_y,
+                            label="Data",
+                            color="b",
+                            marker="s",
+                            markersize=3,
+                        )
+                        ax.plot(
+                            log_x,
+                            log_y_fit,
+                            label=f"Fit: slope={slope:.2f}, $R^2$={r_value**2:.3f}",
+                            color="r",
+                        )
                         ax.legend()
                         add_plot = True
 
                         # Write to DataFrame
                         if data_df is not None:
-                            data_df['y-avg'] = y_avg
-                            data_df['y-std'] = y_err
-                            data_df['log-x'] = log_x
-                            data_df['log-y'] = log_y
-                            data_df['log-y-fit'] = log_y_fit
+                            data_df["y-avg"] = y_avg
+                            data_df["y-std"] = y_err
+                            data_df["log-x"] = log_x
+                            data_df["log-y"] = log_y
+                            data_df["log-y-fit"] = log_y_fit
                     except Exception as err:
                         add_plot = False
-                        logging.exception("Scaling Law (Log-Log Fit) Error: %s", err, extra={'user': 'SGT Logs'})
+                        logging.exception(
+                            "Scaling Law (Log-Log Fit) Error: %s",
+                            err,
+                            extra={"user": "SGT Logs"},
+                        )
 
                     if opt_gtc["scaling_behavior_power_law_fit"]["value"] == 1:
                         # 2b. Compute the line of best-fit on our data according to our power-law model
                         try:
                             # Generate points for the best-fit curve
-                            y_fit_pwr, params = CurveFitModels.power_law(x_avg, y_avg, x_fit)
+                            y_fit_pwr, params = CurveFitModels.power_law(
+                                x_avg, y_avg, x_fit
+                            )
                             a_fit, k_fit = params["a"], params["k"]
 
                             # Compute Kolmogorov-Smirnov Test & Goodness-of-fit P-Values
-                            res_good_fit = sp.stats.goodness_of_fit(sp.stats.powerlaw, y_avg)
-                            ks_stat, ks_p_val = res_good_fit.statistic, res_good_fit.pvalue
+                            res_good_fit = sp.stats.goodness_of_fit(
+                                sp.stats.powerlaw, y_avg
+                            )
+                            ks_stat, ks_p_val = (
+                                res_good_fit.statistic,
+                                res_good_fit.pvalue,
+                            )
 
                             # 3b. Plot data (power-law best fit)
                             ax, i = plot_axis(i, "Power Law Fit and Plot of")
-                            ax.plot(x_fit, y_fit_pwr,
-                                    label=f'Fit: $y = a \\cdot x^{{-k}}$\n$a={a_fit:.2f}, k={k_fit:.2f}$\nKS Stat={ks_stat:.2f}, P-Val={ks_p_val:.2f}',
-                                    color='red')
+                            ax.plot(
+                                x_fit,
+                                y_fit_pwr,
+                                label=f"Fit: $y = a \\cdot x^{{-k}}$\n$a={a_fit:.2f}, k={k_fit:.2f}$\nKS Stat={ks_stat:.2f}, P-Val={ks_p_val:.2f}",
+                                color="red",
+                            )
                             ax.legend(fontsize=6)
 
                             # Write to DataFrame
                             if fit_data_df is not None:
-                                fit_data_df['Pwr. Law y-fit'] = y_fit_pwr
+                                fit_data_df["Pwr. Law y-fit"] = y_fit_pwr
                         except Exception as err:
-                            logging.exception("Scaling Law (Power Law Fit) Error: %s", err, extra={'user': 'SGT Logs'})
+                            logging.exception(
+                                "Scaling Law (Power Law Fit) Error: %s",
+                                err,
+                                extra={"user": "SGT Logs"},
+                            )
 
-                    if opt_gtc["scaling_behavior_stretched_power_law_fit"]["value"] == 1:
+                    if (
+                        opt_gtc["scaling_behavior_stretched_power_law_fit"]["value"]
+                        == 1
+                    ):
                         # 2c. Compute the line of best-fit according to our stretched power-law model
                         try:
                             # Generate points for the best-fit curve
-                            y_fit_cut, params = CurveFitModels.stretched_power_law(x_avg, y_avg, x_fit)
-                            a_fit, k_fit, cut_fit, beta_fit = params["a"], params["k"], params["x_c"], params["beta"]
+                            y_fit_cut, params = CurveFitModels.stretched_power_law(
+                                x_avg, y_avg, x_fit
+                            )
+                            a_fit, k_fit, cut_fit, beta_fit = (
+                                params["a"],
+                                params["k"],
+                                params["x_c"],
+                                params["beta"],
+                            )
 
                             # 3c. Plot data (stretched power-law best fit)
-                            ax, i = plot_axis(i, "Power Law (w. Exponential Cutoff) Fit")
-                            ax.plot(x_fit, y_fit_cut,
-                                    label=f"Fit: $y = a \\cdot x^{{-k}} \\cdot \\exp(-(x / x_c)^\\beta)$\n$a={a_fit:.2f}, k={k_fit:.2f}, x_c={cut_fit:.2f}, \\beta={beta_fit:.2f}$",
-                                    color='red')
+                            ax, i = plot_axis(
+                                i, "Power Law (w. Exponential Cutoff) Fit"
+                            )
+                            ax.plot(
+                                x_fit,
+                                y_fit_cut,
+                                label=f"Fit: $y = a \\cdot x^{{-k}} \\cdot \\exp(-(x / x_c)^\\beta)$\n$a={a_fit:.2f}, k={k_fit:.2f}, x_c={cut_fit:.2f}, \\beta={beta_fit:.2f}$",
+                                color="red",
+                            )
                             ax.legend(fontsize=6)
 
                             # Write to DataFrame
                             if fit_data_df is not None:
-                                fit_data_df['Trunc. Pwr. Law y-fit'] = y_fit_cut
+                                fit_data_df["Trunc. Pwr. Law y-fit"] = y_fit_cut
                         except Exception as err:
-                            logging.exception("Scaling Law (Stretched Power Law Fit) Error: %s", err,
-                                              extra={'user': 'SGT Logs'})
+                            logging.exception(
+                                "Scaling Law (Stretched Power Law Fit) Error: %s",
+                                err,
+                                extra={"user": "SGT Logs"},
+                            )
 
                     if opt_gtc["scaling_behavior_log_normal_fit"]["value"] == 1:
                         # 2d. Compute best-fit, assuming Log-Normal dependence on X
                         try:
                             # Generate predicted points for the best-fit curve
-                            y_fit_ln, params = CurveFitModels.lognormal(x_avg, y_avg, x_fit)
-                            mu_fit, sigma_fit, a_log_fit = params["mu"], params["sigma"], params["a"]
+                            y_fit_ln, params = CurveFitModels.lognormal(
+                                x_avg, y_avg, x_fit
+                            )
+                            mu_fit, sigma_fit, _a_log_fit = (
+                                params["mu"],
+                                params["sigma"],
+                                params["a"],
+                            )
 
                             # Compute Kolmogorov-Smirnov Test & Goodness-of-fit P-Values
-                            res_good_fit = sp.stats.goodness_of_fit(sp.stats.lognorm, y_avg)
-                            ks_stat, ks_p_val = res_good_fit.statistic, res_good_fit.pvalue
+                            res_good_fit = sp.stats.goodness_of_fit(
+                                sp.stats.lognorm, y_avg
+                            )
+                            ks_stat, ks_p_val = (
+                                res_good_fit.statistic,
+                                res_good_fit.pvalue,
+                            )
 
                             # 3c. Plot data (Log-normal distribution best fit)
                             ax, i = plot_axis(i, "Log-Normal Fit and Plot of")
-                            ax.plot(x_fit, y_fit_ln,
-                                    label=f'Fit: log-normal shape\n$\\mu={mu_fit:.2f}$, $\\sigma={sigma_fit:.2f}$\nKS Stat={ks_stat:.2f}, P-Val={ks_p_val:.2f}',
-                                    color='red')
+                            ax.plot(
+                                x_fit,
+                                y_fit_ln,
+                                label=f"Fit: log-normal shape\n$\\mu={mu_fit:.2f}$, $\\sigma={sigma_fit:.2f}$\nKS Stat={ks_stat:.2f}, P-Val={ks_p_val:.2f}",
+                                color="red",
+                            )
                             ax.legend(fontsize=6)
 
                             # Write to DataFrame
                             if fit_data_df is not None:
-                                fit_data_df['Log-Normal y-fit'] = y_fit_ln
+                                fit_data_df["Log-Normal y-fit"] = y_fit_ln
                         except Exception as err:
-                            logging.exception("Scaling Law (Log-Normal Fit) Error: %s", err, extra={'user': 'SGT Logs'})
+                            logging.exception(
+                                "Scaling Law (Log-Normal Fit) Error: %s",
+                                err,
+                                extra={"user": "SGT Logs"},
+                            )
 
                 # Navigate to the next subplot
                 if (i + 1) > 1:
                     if add_plot:
                         plt_figs.append(plt_fig)
                         df_title = f"Nodes-{y_title}"
-                        df_title = f"{df_title[:20]}." if len(df_title) > 20 else df_title
-                        self._scaling_results[df_title] = data_df.copy() if data_df is not None else {}
-                        self._scaling_results[f"{df_title} (Fitting)"] = fit_data_df.copy() if fit_data_df is not None else {}
+                        df_title = (
+                            f"{df_title[:20]}." if len(df_title) > 20 else df_title
+                        )
+                        self._scaling_results[df_title] = (
+                            data_df.copy() if data_df is not None else {}
+                        )
+                        self._scaling_results[f"{df_title} (Fitting)"] = (
+                            fit_data_df.copy() if fit_data_df is not None else {}
+                        )
                     plt_fig = plt.Figure(figsize=(8.5, 11), dpi=300)
                     i = 0
 
             plt_figs.append(plt_fig) if i <= 4 else None
 
             if best_scale is not None:
-                new_row = {'parameter': 'Optimal Image Scale (px)', 'value': int(str(best_scale)) if best_scale is not None else 0}
-                self._results_df = pd.concat([self._results_df, pd.DataFrame([new_row])], ignore_index=True)
+                new_row = {
+                    "parameter": "Optimal Image Scale (px)",
+                    "value": int(str(best_scale)) if best_scale is not None else 0,
+                }
+                self._results_df = pd.concat(
+                    [self._results_df, pd.DataFrame([new_row])], ignore_index=True
+                )
 
             return plt_figs
 
@@ -1399,7 +1881,11 @@ class GraphAnalyzer(ProgressUpdate):
             """
             Custom persistence diagram plotter.
             """
-            self.update_status(ProgressData(percent=92, sender="GT", message=f"Plotting persistence diagrams..."))
+            self.update_status(
+                ProgressData(
+                    percent=92, sender="GT", message="Plotting persistence diagrams..."
+                )
+            )
 
             def plot_persistence_diagram(ax: plt.Axes | None = None):
 
@@ -1407,13 +1893,16 @@ class GraphAnalyzer(ProgressUpdate):
                     return
 
                 if ax is None:
-                    ph_fig, ax = plt.subplots(figsize=(6, 6))
+                    _ph_fig, ax = plt.subplots(figsize=(6, 6))
 
                 # Default labels
-                custom_labels = {0: r"connected components ($\beta_0$)", 1: r"holes ($\beta_1$)"}
+                custom_labels = {
+                    0: r"connected components ($\beta_0$)",
+                    1: r"holes ($\beta_1$)",
+                }
 
                 # Matplotlib default color cycle (stable & familiar)
-                colors = ['r', 'b', 'g', 'c', 'm', 'y']
+                colors = ["r", "b", "g", "c", "m", "y"]
 
                 # Group points by dimension
                 group_infinite = {}
@@ -1442,7 +1931,7 @@ class GraphAnalyzer(ProgressUpdate):
                         color=color,
                         alpha=0.5,
                         edgecolor=color,
-                        label=custom_labels.get(dim, rf"$H_{{{dim}}}$")
+                        label=custom_labels.get(dim, rf"$H_{{{dim}}}$"),
                     )
 
                 # --- Plot infinite persistence points ---
@@ -1463,7 +1952,13 @@ class GraphAnalyzer(ProgressUpdate):
                     )
 
                 # Diagonal line y = x
-                ax.plot([min_lim, max_lim], [min_lim, max_lim], linestyle="-", color="black", linewidth=1)
+                ax.plot(
+                    [min_lim, max_lim],
+                    [min_lim, max_lim],
+                    linestyle="-",
+                    color="black",
+                    linewidth=1,
+                )
 
                 # Shade invalid region (below diagonal)
                 ax.fill_between(
@@ -1471,32 +1966,51 @@ class GraphAnalyzer(ProgressUpdate):
                     [min_lim, max_lim],
                     [min_lim, min_lim],
                     color="gray",
-                    alpha=0.4
+                    alpha=0.4,
                 )
 
                 # Infinity line
                 ax.axhline(infinity_value, linestyle="-", color="k", linewidth=0.5)
                 current_ticks = list(ax.get_yticks())
                 new_ticks = copy.deepcopy(current_ticks)
-                new_ticks = new_ticks + [infinity_value] if infinity_value not in set(current_ticks) else new_ticks
+                new_ticks = (
+                    new_ticks + [infinity_value]
+                    if infinity_value not in set(current_ticks)
+                    else new_ticks
+                )
                 for t in current_ticks:
-                    if (t*1.15) > infinity_value:
+                    if (t * 1.15) > infinity_value:
                         new_ticks.remove(t)
-                new_labels = [str(int(t)) if t != infinity_value else r"$+\infty$" for t in new_ticks]
+                new_labels = [
+                    str(int(t)) if t != infinity_value else r"$+\infty$"
+                    for t in new_ticks
+                ]
                 ax.set_yticks(new_ticks)
                 ax.set_yticklabels(new_labels)
 
                 # Critical epsilon line
                 if isinstance(critical_epsilon, float):
-                    ax.axhline(critical_epsilon, linestyle="-", color="r", linewidth=1.2)
-                    ax.text(5, critical_epsilon+0.5, r"$\epsilon_{critical}$", va='bottom', ha='left', color='r', fontsize=16)
+                    ax.axhline(
+                        critical_epsilon, linestyle="-", color="r", linewidth=1.2
+                    )
+                    ax.text(
+                        5,
+                        critical_epsilon + 0.5,
+                        r"$\epsilon_{critical}$",
+                        va="bottom",
+                        ha="left",
+                        color="r",
+                        fontsize=16,
+                    )
 
                 ax.set_xlim(min_lim, max_lim)
                 ax.set_ylim(min_lim, infinity_value * 1.1)
 
                 ax.set_xlabel(r"Birth (Radius of $\epsilon$)", fontsize=14)
                 ax.set_ylabel(r"Death (Radius of $\epsilon$)", fontsize=14)
-                ax.set_title(r"Persistence Diagram ($\beta_0$ and $\beta_1$)", fontsize=16)
+                ax.set_title(
+                    r"Persistence Diagram ($\beta_0$ and $\beta_1$)", fontsize=16
+                )
                 ax.legend(loc="lower right", fontsize=14)
                 # ax.grid(True, alpha=0.3)
                 # return ax
@@ -1505,13 +2019,17 @@ class GraphAnalyzer(ProgressUpdate):
                 """Plot A: Pure node point cloud (Explicitly showing NO prior graph edges)"""
                 if point_cloud is None:
                     return
-                ax.scatter(point_cloud[:, 0], point_cloud[:, 1], color='k', s=16, zorder=5)
+                ax.scatter(
+                    point_cloud[:, 0], point_cloud[:, 1], color="k", s=16, zorder=5
+                )
                 ax.set_title("Point Cloud Data (Nodes)")
-                ax.set_aspect('equal')
+                ax.set_aspect("equal")
                 # ax.grid(True, linestyle='--', alpha=0.5)
 
             # Get data
-            ph_data = self._persistent_homology_data["persistent_homology"] # [(dim, (birth, death)), ...]
+            ph_data = self._persistent_homology_data[
+                "persistent_homology"
+            ]  # [(dim, (birth, death)), ...]
             point_cloud = self._persistent_homology_data["point_cloud_data"]
             if ph_data is None or point_cloud is None:
                 return None
@@ -1527,7 +2045,9 @@ class GraphAnalyzer(ProgressUpdate):
 
             # Plot A: The Persistence Diagram tracking components and holes
             ax_1 = plt_fig.add_subplot(2, 1, 1)
-            plot_persistence_diagram(ax=ax_1)  # gudhi.plot_persistence_diagram(persistence, axes=ax_1)
+            plot_persistence_diagram(
+                ax=ax_1
+            )  # gudhi.plot_persistence_diagram(persistence, axes=ax_1)
 
             # Plot B: Point Cloud Data
             ax_2 = plt_fig.add_subplot(2, 1, 2)
@@ -1540,13 +2060,23 @@ class GraphAnalyzer(ProgressUpdate):
 
             :return: A list of Matplotlib figures.
             """
-            self.update_status(ProgressData(percent=93, sender="GT", message=f"Generating histograms..."))
+            self.update_status(
+                ProgressData(
+                    percent=93, sender="GT", message="Generating histograms..."
+                )
+            )
 
             opt_gte = graph_obj.configs
             plt_figs = []
 
-            def plot_distribution_histogram(ax: Axes, title: str, distribution: list, x_label: str,
-                                            plt_bins: np.ndarray|None = None, y_label: str = 'Counts'):
+            def plot_distribution_histogram(
+                ax: Axes,
+                title: str,
+                distribution: list,
+                x_label: str,
+                plt_bins: np.ndarray | None = None,
+                y_label: str = "Counts",
+            ):
                 """
                 Create a histogram from a distribution dataset.
 
@@ -1558,7 +2088,7 @@ class GraphAnalyzer(ProgressUpdate):
                 :param y_label: Y-label title text.
                 :return:
                 """
-                font_1 = {'fontsize': 9}
+                font_1 = {"fontsize": 9}
                 if plt_bins is None:
                     plt_bins = np.linspace(min(distribution), max(distribution), 50)
                 try:
@@ -1575,15 +2105,19 @@ class GraphAnalyzer(ProgressUpdate):
             if opt_gtc["display_degree_histogram"]["value"] == 1:
                 deg_distribution = self._histogram_data["degree_distribution"]
                 bins = np.arange(0.5, max(deg_distribution) + 1.5, 1)
-                deg_title = r'Degree Distribution: $\sigma$='
+                deg_title = r"Degree Distribution: $\sigma$="
                 ax_1 = plt_fig.add_subplot(2, 1, 1)
-                plot_distribution_histogram(ax_1, deg_title, deg_distribution, 'Degree', plt_bins=bins)
+                plot_distribution_histogram(
+                    ax_1, deg_title, deg_distribution, "Degree", plt_bins=bins
+                )
 
             if opt_gtc["display_closeness_centrality_histogram"]["value"] == 1:
                 clo_distribution = self._histogram_data["closeness_distribution"]
                 cc_title = r"Closeness Centrality: $\sigma$="
                 ax_2 = plt_fig.add_subplot(2, 1, 2)
-                plot_distribution_histogram(ax_2, cc_title, clo_distribution, 'Closeness value')
+                plot_distribution_histogram(
+                    ax_2, cc_title, clo_distribution, "Closeness value"
+                )
             plt_figs.append(plt_fig)
 
             # Betweenness, Clustering, Eigenvector and Ohms
@@ -1592,58 +2126,87 @@ class GraphAnalyzer(ProgressUpdate):
                 bet_distribution = self._histogram_data["betweenness_distribution"]
                 bc_title = r"Betweenness Centrality: $\sigma$="
                 ax_1 = plt_fig.add_subplot(2, 2, 1)
-                plot_distribution_histogram(ax_1, bc_title, bet_distribution, 'Betweenness value')
+                plot_distribution_histogram(
+                    ax_1, bc_title, bet_distribution, "Betweenness value"
+                )
 
             if opt_gtc["compute_avg_clustering_coef"]["value"] == 1:
                 cluster_coefs = self._histogram_data["clustering_coefficients"]
                 clu_title = r"Clustering Coefficients: $\sigma$="
                 ax_2 = plt_fig.add_subplot(2, 2, 2)
-                plot_distribution_histogram(ax_2, clu_title, cluster_coefs, 'Clust. Coeff.')
+                plot_distribution_histogram(
+                    ax_2, clu_title, cluster_coefs, "Clust. Coeff."
+                )
 
             if opt_gtc["display_ohms_histogram"]["value"] == 1:
                 ohm_distribution = self._histogram_data["ohms_distribution"]
                 oh_title = r"Ohms Centrality: $\sigma$="
                 ax_3 = plt_fig.add_subplot(2, 2, 3)
-                plot_distribution_histogram(ax_3, oh_title, ohm_distribution, 'Ohms value')
+                plot_distribution_histogram(
+                    ax_3, oh_title, ohm_distribution, "Ohms value"
+                )
 
             if opt_gtc["display_eigenvector_centrality_histogram"]["value"] == 1:
                 eig_distribution = self._histogram_data["eigenvector_distribution"]
                 ec_title = r"Eigenvector Centrality: $\sigma$="
                 ax_4 = plt_fig.add_subplot(2, 2, 4)
-                plot_distribution_histogram(ax_4, ec_title, eig_distribution, 'Eigenvector value')
+                plot_distribution_histogram(
+                    ax_4, ec_title, eig_distribution, "Eigenvector value"
+                )
             plt_figs.append(plt_fig)
 
             # weighted histograms
             if opt_gte["has_weights"]["value"] == 1:
                 wt_type = graph_obj.get_weight_type()
-                weight_type: str = str(wt_str) if (wt_str := FiberNetworkBuilder.get_weight_options().get(wt_type)) is not None else ""
+                weight_type: str = (
+                    str(wt_str)
+                    if (wt_str := FiberNetworkBuilder.get_weight_options().get(wt_type))
+                    is not None
+                    else ""
+                )
 
                 # degree, betweenness, closeness and eigenvector
                 plt_fig = plt.Figure(figsize=(8.5, 11), dpi=300)
                 if opt_gtc["display_degree_histogram"]["value"] == 1:
-                    w_deg_distribution = self._histogram_data["weighted_degree_distribution"]
+                    w_deg_distribution = self._histogram_data[
+                        "weighted_degree_distribution"
+                    ]
                     bins = np.arange(0.5, max(w_deg_distribution) + 1.5, 1)
                     w_deg_title = r"Weighted Degree: $\sigma$="
                     ax_1 = plt_fig.add_subplot(2, 2, 1)
-                    plot_distribution_histogram(ax_1, w_deg_title, w_deg_distribution, 'Degree', plt_bins=bins)
+                    plot_distribution_histogram(
+                        ax_1, w_deg_title, w_deg_distribution, "Degree", plt_bins=bins
+                    )
 
                 if opt_gtc["display_betweenness_centrality_histogram"]["value"] == 1:
-                    w_bet_distribution = self._histogram_data["weighted_betweenness_distribution"]
+                    w_bet_distribution = self._histogram_data[
+                        "weighted_betweenness_distribution"
+                    ]
                     w_bt_title = weight_type + r"-Weighted Betweenness: $\sigma$="
                     ax_2 = plt_fig.add_subplot(2, 2, 2)
-                    plot_distribution_histogram(ax_2, w_bt_title, w_bet_distribution, 'Betweenness value')
+                    plot_distribution_histogram(
+                        ax_2, w_bt_title, w_bet_distribution, "Betweenness value"
+                    )
 
                 if opt_gtc["display_closeness_centrality_histogram"]["value"] == 1:
-                    w_clo_distribution = self._histogram_data["weighted_closeness_distribution"]
+                    w_clo_distribution = self._histogram_data[
+                        "weighted_closeness_distribution"
+                    ]
                     w_clo_title = r"Length-Weighted Closeness: $\sigma$="
                     ax_3 = plt_fig.add_subplot(2, 2, 3)
-                    plot_distribution_histogram(ax_3, w_clo_title, w_clo_distribution, 'Closeness value')
+                    plot_distribution_histogram(
+                        ax_3, w_clo_title, w_clo_distribution, "Closeness value"
+                    )
 
                 if opt_gtc["display_eigenvector_centrality_histogram"]["value"] == 1:
-                    w_eig_distribution = self._histogram_data["weighted_eigenvector_distribution"]
+                    w_eig_distribution = self._histogram_data[
+                        "weighted_eigenvector_distribution"
+                    ]
                     w_ec_title = weight_type + r"-Weighted Eigenvector Cent.: $\sigma$="
                     ax_4 = plt_fig.add_subplot(2, 2, 4)
-                    plot_distribution_histogram(ax_4, w_ec_title, w_eig_distribution, 'Eigenvector value')
+                    plot_distribution_histogram(
+                        ax_4, w_ec_title, w_eig_distribution, "Eigenvector value"
+                    )
                 plt_figs.append(plt_fig)
 
             return plt_figs
@@ -1654,16 +2217,20 @@ class GraphAnalyzer(ProgressUpdate):
 
             :return: A list of Matplotlib figures.
             """
-            self.update_status(ProgressData(percent=95, sender="GT", message=f"Generating heatmaps..."))
+            self.update_status(
+                ProgressData(percent=95, sender="GT", message="Generating heatmaps...")
+            )
 
             sz = 30
-            lc = 'black'
+            lc = "black"
             plt_figs = []
             opt_gte = graph_obj.configs
             wt_type = graph_obj.get_weight_type()
             weight_type = FiberNetworkBuilder.get_weight_options().get(wt_type)
 
-            def plot_distribution_heatmap(distribution: list, title: str, size: float, line_color: str):
+            def plot_distribution_heatmap(
+                distribution: list, title: str, size: float, line_color: str
+            ):
                 """
                 Create a heatmap from a distribution.
 
@@ -1674,68 +2241,97 @@ class GraphAnalyzer(ProgressUpdate):
                 :return: Histogram plot figure.
                 """
                 nx_graph = graph_obj.nx_giant_graph
-                fig_grp = FiberNetworkBuilder.plot_graph_edges(img_3d, nx_graph, node_distribution_data=distribution,
-                                                               plot_nodes=True, edge_color=line_color, node_marker_size=size)
+                fig_grp = FiberNetworkBuilder.plot_graph_edges(
+                    img_3d,
+                    nx_graph,
+                    node_distribution_data=distribution,
+                    plot_nodes=True,
+                    edge_color=line_color,
+                    node_marker_size=size,
+                )
 
                 plt_fig_inner = fig_grp[0]
                 plt_fig_inner.set_size_inches(8.5, 8.5)
                 plt_fig_inner.set_dpi(400)
                 plt_ax = plt_fig_inner.axes[0]
-                plt_ax.set_title(title, fontdict={'fontsize': 9})
+                plt_ax.set_title(title, fontdict={"fontsize": 9})
                 plt_ax.set_position([0.05, 0.05, 0.75, 0.75])
 
                 return plt_fig_inner
 
             if opt_gtc["display_degree_histogram"]["value"] == 1:
                 deg_distribution = self._histogram_data["degree_distribution"]
-                plt_fig = plot_distribution_heatmap(deg_distribution, 'Degree Heatmap', sz, lc)
+                plt_fig = plot_distribution_heatmap(
+                    deg_distribution, "Degree Heatmap", sz, lc
+                )
                 plt_figs.append(plt_fig)
-            if (opt_gtc["display_degree_histogram"]["value"] == 1) and (opt_gte["has_weights"]["value"] == 1):
-                w_deg_distribution = self._histogram_data["weighted_degree_distribution"]
-                plt_title = 'Weighted Degree Heatmap'
-                plt_fig = plot_distribution_heatmap(w_deg_distribution, plt_title, sz, lc)
+            if (opt_gtc["display_degree_histogram"]["value"] == 1) and (
+                opt_gte["has_weights"]["value"] == 1
+            ):
+                w_deg_distribution = self._histogram_data[
+                    "weighted_degree_distribution"
+                ]
+                plt_title = "Weighted Degree Heatmap"
+                plt_fig = plot_distribution_heatmap(
+                    w_deg_distribution, plt_title, sz, lc
+                )
                 plt_figs.append(plt_fig)
             if opt_gtc["compute_avg_clustering_coef"]["value"] == 1:
                 cluster_coefs = self._histogram_data["clustering_coefficients"]
-                plt_title = 'Clustering Coefficient Heatmap'
+                plt_title = "Clustering Coefficient Heatmap"
                 plt_fig = plot_distribution_heatmap(cluster_coefs, plt_title, sz, lc)
                 plt_figs.append(plt_fig)
             if opt_gtc["display_betweenness_centrality_histogram"]["value"] == 1:
                 bet_distribution = self._histogram_data["betweenness_distribution"]
-                plt_title = 'Betweenness Centrality Heatmap'
+                plt_title = "Betweenness Centrality Heatmap"
                 plt_fig = plot_distribution_heatmap(bet_distribution, plt_title, sz, lc)
                 plt_figs.append(plt_fig)
             if (opt_gtc["display_betweenness_centrality_histogram"]["value"] == 1) and (
-                    opt_gte["has_weights"]["value"] == 1):
-                w_bet_distribution = self._histogram_data["weighted_betweenness_distribution"]
-                plt_title = f'{weight_type}-Weighted Betweenness Centrality Heatmap'
-                plt_fig = plot_distribution_heatmap(w_bet_distribution, plt_title, sz, lc)
+                opt_gte["has_weights"]["value"] == 1
+            ):
+                w_bet_distribution = self._histogram_data[
+                    "weighted_betweenness_distribution"
+                ]
+                plt_title = f"{weight_type}-Weighted Betweenness Centrality Heatmap"
+                plt_fig = plot_distribution_heatmap(
+                    w_bet_distribution, plt_title, sz, lc
+                )
                 plt_figs.append(plt_fig)
             if opt_gtc["display_closeness_centrality_histogram"]["value"] == 1:
                 clo_distribution = self._histogram_data["closeness_distribution"]
-                plt_title = 'Closeness Centrality Heatmap'
+                plt_title = "Closeness Centrality Heatmap"
                 plt_fig = plot_distribution_heatmap(clo_distribution, plt_title, sz, lc)
                 plt_figs.append(plt_fig)
             if (opt_gtc["display_closeness_centrality_histogram"]["value"] == 1) and (
-                    opt_gte["has_weights"]["value"] == 1):
-                w_clo_distribution = self._histogram_data["weighted_closeness_distribution"]
-                plt_title = 'Length-Weighted Closeness Centrality Heatmap'
-                plt_fig = plot_distribution_heatmap(w_clo_distribution, plt_title, sz, lc)
+                opt_gte["has_weights"]["value"] == 1
+            ):
+                w_clo_distribution = self._histogram_data[
+                    "weighted_closeness_distribution"
+                ]
+                plt_title = "Length-Weighted Closeness Centrality Heatmap"
+                plt_fig = plot_distribution_heatmap(
+                    w_clo_distribution, plt_title, sz, lc
+                )
                 plt_figs.append(plt_fig)
             if opt_gtc["display_eigenvector_centrality_histogram"]["value"] == 1:
                 eig_distribution = self._histogram_data["eigenvector_distribution"]
-                plt_title = 'Eigenvector Centrality Heatmap'
+                plt_title = "Eigenvector Centrality Heatmap"
                 plt_fig = plot_distribution_heatmap(eig_distribution, plt_title, sz, lc)
                 plt_figs.append(plt_fig)
             if (opt_gtc["display_eigenvector_centrality_histogram"]["value"] == 1) and (
-                    opt_gte["has_weights"]["value"] == 1):
-                w_eig_distribution = self._histogram_data["weighted_eigenvector_distribution"]
-                plt_title = f'{weight_type}-Weighted Eigenvector Centrality Heatmap'
-                plt_fig = plot_distribution_heatmap(w_eig_distribution, plt_title, sz, lc)
+                opt_gte["has_weights"]["value"] == 1
+            ):
+                w_eig_distribution = self._histogram_data[
+                    "weighted_eigenvector_distribution"
+                ]
+                plt_title = f"{weight_type}-Weighted Eigenvector Centrality Heatmap"
+                plt_fig = plot_distribution_heatmap(
+                    w_eig_distribution, plt_title, sz, lc
+                )
                 plt_figs.append(plt_fig)
             if opt_gtc["display_ohms_histogram"]["value"] == 1:
                 ohm_distribution = self._histogram_data["ohms_distribution"]
-                plt_title = 'Ohms Centrality Heatmap'
+                plt_title = "Ohms Centrality Heatmap"
                 plt_fig = plot_distribution_heatmap(ohm_distribution, plt_title, sz, lc)
                 plt_figs.append(plt_fig)
             return plt_figs
@@ -1749,7 +2345,9 @@ class GraphAnalyzer(ProgressUpdate):
             out_figs.append(fig)
 
         # 3a. plotting graph nodes
-        fig = graph_obj.plot_graph_network(image_arr=img_3d, plot_nodes=True, a4_size=True)
+        fig = graph_obj.plot_graph_network(
+            image_arr=img_3d, plot_nodes=True, a4_size=True
+        )
         if fig is not None:
             out_figs.append(fig)
 
@@ -1803,7 +2401,9 @@ class GraphAnalyzer(ProgressUpdate):
         """
         try:
             if update_func:
-                update_func(ProgressData(percent=98, sender="GT", message="Writing PDF..."))
+                update_func(
+                    ProgressData(percent=98, sender="GT", message="Writing PDF...")
+                )
 
             filename, output_location = sgt_obj.ntwk_p.get_filenames()
             pdf_filename = filename + "_SGT_results.pdf"
@@ -1829,21 +2429,39 @@ class GraphAnalyzer(ProgressUpdate):
             if sgt_obj.scaling_results:
                 excel_filename = filename + "_SGT_scaling.xlsx"
                 excel_file = os.path.join(output_location, excel_filename)
-                with pd.ExcelWriter(str(excel_file), engine='xlsxwriter') as writer:
+                with pd.ExcelWriter(str(excel_file), engine="xlsxwriter") as writer:
                     for tbl_title, tbl_df in sgt_obj.scaling_results.items():
                         # Clean sheet name: Excel allows max 31 chars, no : \ / ? * [ ]
-                        safe_title = str(tbl_title)[:31].replace(":", "").replace("\\", "").replace("/", "") \
-                            .replace("?", "").replace("*", "").replace("[", "").replace("]", "")
+                        safe_title = (
+                            str(tbl_title)[:31]
+                            .replace(":", "")
+                            .replace("\\", "")
+                            .replace("/", "")
+                            .replace("?", "")
+                            .replace("*", "")
+                            .replace("[", "")
+                            .replace("]", "")
+                        )
                         tbl_df.to_excel(writer, sheet_name=safe_title, index=False)
             return True
         except Exception as err:
-            logging.exception("GT Computation Error: %s", err, extra={'user': 'SGT Logs'})
+            logging.exception(
+                "GT Computation Error: %s", err, extra={"user": "SGT Logs"}
+            )
             if update_func:
-                update_func(ProgressData(type="error", sender="GT", message="An error occurred while writing PDF."))
+                update_func(
+                    ProgressData(
+                        type="error",
+                        sender="GT",
+                        message="An error occurred while writing PDF.",
+                    )
+                )
             return False
 
     @staticmethod
-    def safe_run_analyzer(sgt_obj, update_func, save_to_pdf=False) -> tuple[bool, None] | tuple[bool, "GraphAnalyzer"]:
+    def safe_run_analyzer(
+        sgt_obj, update_func, save_to_pdf=False
+    ) -> tuple[bool, None] | tuple[bool, GraphAnalyzer]:
         """
         Safely compute GT descriptors without raising exceptions or crushing app.
 
@@ -1869,18 +2487,28 @@ class GraphAnalyzer(ProgressUpdate):
             sgt_obj.remove_listener(update_func)
             return True, sgt_obj
         except AbortException:
-            update_func(ProgressData(type="error", sender="GT", message="Task aborted by user of a fatal error occurred!"))
+            update_func(
+                ProgressData(
+                    type="error",
+                    sender="GT",
+                    message="Task aborted by user of a fatal error occurred!",
+                )
+            )
             sgt_obj.remove_listener(update_func)
             return False, None
         except Exception as err:
-            update_func(ProgressData(type="error", sender="GT", message="Error encountered! Try again."))
-            logging.exception("Error: %s", err, extra={'user': 'SGT Logs'})
+            update_func(
+                ProgressData(
+                    type="error", sender="GT", message="Error encountered! Try again."
+                )
+            )
+            logging.exception("Error: %s", err, extra={"user": "SGT Logs"})
             # Clean up listeners before exiting
             sgt_obj.remove_listener(update_func)
             return False, None
 
     @staticmethod
-    def safe_run_multi_analyzer(sgt_objs, update_func) -> None|dict:
+    def safe_run_multi_analyzer(sgt_objs, update_func) -> None | dict:
         """
         Safely compute GT descriptors of multiple images without raising exceptions or crushing the app.
 
@@ -1905,7 +2533,7 @@ class GraphAnalyzer(ProgressUpdate):
                 end = time.time()
 
                 i += 1
-                output = status_msg + "\n" + f"Run-time: {str(end - start)}  seconds\n"
+                output = status_msg + "\n" + f"Run-time: {end - start!s}  seconds\n"
                 output += "Results generated for: " + sgt_obj.ntwk_p.img_path + "\n"
                 # graph_obj = sgt_obj.ntwk_p.graph_obj
                 # output += "Node Count: " + str(graph_obj.nx_giant_graph.number_of_nodes()) + "\n"
@@ -1913,12 +2541,22 @@ class GraphAnalyzer(ProgressUpdate):
                 # filename, out_dir = sgt_obj.ntwk_p.get_filenames()
                 # out_file = os.path.join(out_dir, filename + '-v2_results.txt')
                 # write_txt_file(output, out_file)
-                logging.info(output, extra={'user': 'SGT Logs'})
+                logging.info(output, extra={"user": "SGT Logs"})
             return sgt_objs
         except AbortException:
-            update_func(ProgressData(type="error", sender="GT", message="Task aborted by user of a fatal error occurred!"))
+            update_func(
+                ProgressData(
+                    type="error",
+                    sender="GT",
+                    message="Task aborted by user of a fatal error occurred!",
+                )
+            )
             return None
         except Exception as err:
-            update_func(ProgressData(type="error", sender="GT", message="Error encountered! Try again."))
-            logging.exception("Error: %s", err, extra={'user': 'SGT Logs'})
+            update_func(
+                ProgressData(
+                    type="error", sender="GT", message="Error encountered! Try again."
+                )
+            )
+            logging.exception("Error: %s", err, extra={"user": "SGT Logs"})
             return None

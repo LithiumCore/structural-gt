@@ -4,14 +4,15 @@
 StructuralGT module for generating plots and DataFrames
 """
 
+import multiprocessing as mp
 import os
-import scipy as sp
+from dataclasses import dataclass
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import multiprocessing as mp
-import matplotlib.pyplot as plt
+import scipy as sp
 from scipy import stats
-from dataclasses import dataclass
 
 
 @dataclass
@@ -39,7 +40,9 @@ class CurveFitModels:
             return {"name": name, "ks": np.nan, "p": np.nan, "error": str(e)}
 
     @staticmethod
-    def power_law(x_avg: np.ndarray|None, y_avg: np.ndarray|None, x_fit: np.ndarray|None) -> tuple[np.ndarray, dict] | tuple[None, dict]:
+    def power_law(
+        x_avg: np.ndarray | None, y_avg: np.ndarray | None, x_fit: np.ndarray | None
+    ) -> tuple[np.ndarray, dict] | tuple[None, dict]:
         """
         Fits a power-law model to the given data and returns the fitted curve along with the model parameters.
 
@@ -75,8 +78,14 @@ class CurveFitModels:
 
         try:
             init_params = [1.0, 1.0]  # initial guess for [a, k]
-            optimal_params: np.ndarray = sp.optimize.curve_fit(fit_function, x_avg, y_avg, p0=init_params,
-                                                            bounds = ([1e-10, 0.01], [np.inf, 10.0]), maxfev=10000)[0]
+            optimal_params: np.ndarray = sp.optimize.curve_fit(
+                fit_function,
+                x_avg,
+                y_avg,
+                p0=init_params,
+                bounds=([1e-10, 0.01], [np.inf, 10.0]),
+                maxfev=10000,
+            )[0]
             a_fit, k_fit = float(optimal_params[0]), float(optimal_params[1])
 
             # Generate points for the best-fit curve
@@ -87,7 +96,9 @@ class CurveFitModels:
             return None, {"a": 0.0, "k": 0.0}
 
     @staticmethod
-    def stretched_power_law(x_avg: np.ndarray|None, y_avg: np.ndarray|None, x_fit: np.ndarray|None) -> tuple[np.ndarray, dict] | tuple[None, dict]:
+    def stretched_power_law(
+        x_avg: np.ndarray | None, y_avg: np.ndarray | None, x_fit: np.ndarray | None
+    ) -> tuple[np.ndarray, dict] | tuple[None, dict]:
         """
         Fits a stretched power-law (Weibull-tail power-law) model to the given data and returns
         the fitted curve along with the model parameters.
@@ -119,18 +130,35 @@ class CurveFitModels:
         if x_avg is None or y_avg is None or x_fit is None:
             return None, {"a": 0.0, "k": 0.0, "x_c": 0.0, "beta": 0.0}
 
-        def fit_function(x: np.ndarray, a: float, k: float, x_c: float, beta: float) -> np.ndarray:
+        def fit_function(
+            x: np.ndarray, a: float, k: float, x_c: float, beta: float
+        ) -> np.ndarray:
             """
             Stretched power-law model: y = a * x^(-k) * exp(-(x / x_c)^beta)
             """
-            return a * (x ** (-k)) * np.exp(-(x / x_c) ** beta)
+            return a * (x ** (-k)) * np.exp(-((x / x_c) ** beta))
 
         try:
-            init_params = [0.01, 0.01, 1.0, 0.1]  # initial guesses for [a, k, x_c, beta]
-            optimal_params: np.ndarray = sp.optimize.curve_fit(fit_function, x_avg, y_avg, p0=init_params,
-                                    bounds = ([1e-10, 0.01, 1e-10, 0.01],[np.inf, 10.0, np.inf, 5.0]), maxfev=10000)[0]
-            a_fit, k_fit, x_c_fit, beta_fit = (float(optimal_params[0]), float(optimal_params[1]),
-                                               float(optimal_params[2]), float(optimal_params[3]))
+            init_params = [
+                0.01,
+                0.01,
+                1.0,
+                0.1,
+            ]  # initial guesses for [a, k, x_c, beta]
+            optimal_params: np.ndarray = sp.optimize.curve_fit(
+                fit_function,
+                x_avg,
+                y_avg,
+                p0=init_params,
+                bounds=([1e-10, 0.01, 1e-10, 0.01], [np.inf, 10.0, np.inf, 5.0]),
+                maxfev=10000,
+            )[0]
+            a_fit, k_fit, x_c_fit, beta_fit = (
+                float(optimal_params[0]),
+                float(optimal_params[1]),
+                float(optimal_params[2]),
+                float(optimal_params[3]),
+            )
 
             # Generate points for the best-fit curve
             y_fit = fit_function(x_fit, a_fit, k_fit, x_c_fit, beta_fit)
@@ -140,7 +168,9 @@ class CurveFitModels:
             return None, {"a": 0.0, "k": 0.0, "x_c": 0.0, "beta": 0.0}
 
     @staticmethod
-    def lognormal(x_avg: np.ndarray|None, y_avg: np.ndarray|None, x_fit: np.ndarray|None) -> tuple[np.ndarray, dict] | tuple[None, dict]:
+    def lognormal(
+        x_avg: np.ndarray | None, y_avg: np.ndarray | None, x_fit: np.ndarray | None
+    ) -> tuple[np.ndarray, dict] | tuple[None, dict]:
         """
         Fits a log-normal model to the data and returns the fitted curve and parameters.
 
@@ -166,19 +196,34 @@ class CurveFitModels:
         if x_avg is None or y_avg is None or x_fit is None:
             return None, {"mu": 0.0, "sigma": 0.0, "a": 0.0}
 
-        def fit_function(x: np.ndarray, mu: float, sigma: float, a: float) -> np.ndarray:
+        def fit_function(
+            x: np.ndarray, mu: float, sigma: float, a: float
+        ) -> np.ndarray:
             """
             Log-normal model:
             y = a * [1 / (x * sigma * sqrt(2π))] * exp(-((ln(x) - μ)^2) / (2σ²))
             """
-            return a * (1 / (x * sigma * np.sqrt(2 * np.pi))) * np.exp(-((np.log(x) - mu) ** 2) / (2 * sigma ** 2))
+            return (
+                a
+                * (1 / (x * sigma * np.sqrt(2 * np.pi)))
+                * np.exp(-((np.log(x) - mu) ** 2) / (2 * sigma**2))
+            )
 
         try:
             init_params_log = [0.5, 0.5, 5]  # mu, sigma, a
-            opt_params_log: np.ndarray = \
-                sp.optimize.curve_fit(fit_function, x_avg, y_avg, p0=init_params_log,
-                                      bounds=([-np.inf, 0, 0], [np.inf, np.inf, np.inf]), maxfev=10000)[0]
-            mu_fit, sigma_fit, a_fit = float(opt_params_log[0]), float(opt_params_log[1]), float(opt_params_log[2])
+            opt_params_log: np.ndarray = sp.optimize.curve_fit(
+                fit_function,
+                x_avg,
+                y_avg,
+                p0=init_params_log,
+                bounds=([-np.inf, 0, 0], [np.inf, np.inf, np.inf]),
+                maxfev=10000,
+            )[0]
+            mu_fit, sigma_fit, a_fit = (
+                float(opt_params_log[0]),
+                float(opt_params_log[1]),
+                float(opt_params_log[2]),
+            )
 
             # Generate predicted points for the best-fit curve
             y_fit = fit_function(x_fit, mu_fit, sigma_fit, a_fit)
@@ -188,7 +233,9 @@ class CurveFitModels:
             return None, {"mu": 0.0, "sigma": 0.0, "a": 0.0}
 
     @staticmethod
-    def exponential(x_avg: np.ndarray|None, y_avg: np.ndarray|None, x_fit: np.ndarray|None) -> tuple[np.ndarray, dict] | tuple[None, dict]:
+    def exponential(
+        x_avg: np.ndarray | None, y_avg: np.ndarray | None, x_fit: np.ndarray | None
+    ) -> tuple[np.ndarray, dict] | tuple[None, dict]:
         """
         Fits an exponential model to the data and returns the fitted curve and parameters.
 
@@ -220,8 +267,13 @@ class CurveFitModels:
         try:
             init_params = [1.0, 0.1, 0.0]
             opt_params: np.ndarray = sp.optimize.curve_fit(
-                fit_function, x_avg, y_avg, p0=init_params,
-                bounds=([-np.inf, 0, -np.inf], [np.inf, np.inf, np.inf]), maxfev=5000 )[0]
+                fit_function,
+                x_avg,
+                y_avg,
+                p0=init_params,
+                bounds=([-np.inf, 0, -np.inf], [np.inf, np.inf, np.inf]),
+                maxfev=5000,
+            )[0]
 
             a_fit, b_fit, c_fit = map(float, opt_params)
             y_fit = fit_function(x_fit, a_fit, b_fit, c_fit)
@@ -231,7 +283,9 @@ class CurveFitModels:
             return None, {"a": 0.0, "lambda": 0.0, "c": 0.0}
 
     @staticmethod
-    def gamma(x_avg: np.ndarray|None, y_avg: np.ndarray|None, x_fit: np.ndarray|None) -> tuple[np.ndarray, dict] | tuple[None, dict]:
+    def gamma(
+        x_avg: np.ndarray | None, y_avg: np.ndarray | None, x_fit: np.ndarray | None
+    ) -> tuple[np.ndarray, dict] | tuple[None, dict]:
         """
         Fits a Gamma distribution model to the given (x_avg, y_avg) data.
 
@@ -260,13 +314,19 @@ class CurveFitModels:
         if x_avg is None or y_avg is None or x_fit is None:
             return None, {"a": 0.0, "k": 0.0, "theta": 0.0}
 
-        def fit_function(x: np.ndarray, a: float, alpha: float, theta: float) -> np.ndarray:
+        def fit_function(
+            x: np.ndarray, a: float, alpha: float, theta: float
+        ) -> np.ndarray:
             """
             Gamma model:
             y = a * [x^(k-1) * exp(-x/θ)] / [θ^k * Γ(k)]
             """
             gamma_k = sp.special.gamma(alpha)
-            return a * ((x ** (alpha - 1)) * np.exp(-x / theta)) / ((theta ** alpha) * gamma_k)
+            return (
+                a
+                * ((x ** (alpha - 1)) * np.exp(-x / theta))
+                / ((theta**alpha) * gamma_k)
+            )
 
         try:
             # Initial guesses for [a, alpha, theta]
@@ -279,11 +339,14 @@ class CurveFitModels:
                 y_avg,
                 p0=init_params_gamma,
                 bounds=([0, 0, 0], [np.inf, np.inf, np.inf]),
-                maxfev=1000
+                maxfev=1000,
             )[0]
 
-            a_fit, alpha_fit, theta_fit = float(opt_params_gamma[0]), float(opt_params_gamma[1]), float(
-                opt_params_gamma[2])
+            a_fit, alpha_fit, theta_fit = (
+                float(opt_params_gamma[0]),
+                float(opt_params_gamma[1]),
+                float(opt_params_gamma[2]),
+            )
 
             # Generate predicted points for the best-fit curve
             y_fit = fit_function(x_fit, a_fit, alpha_fit, theta_fit)
@@ -293,7 +356,9 @@ class CurveFitModels:
             return None, {"a": 0.0, "k": 0.0, "theta": 0.0}
 
     @staticmethod
-    def linear(x_avg: np.ndarray|None, y_avg: np.ndarray|None, x_fit: np.ndarray|None) -> tuple[np.ndarray, dict] | tuple[None, dict]:
+    def linear(
+        x_avg: np.ndarray | None, y_avg: np.ndarray | None, x_fit: np.ndarray | None
+    ) -> tuple[np.ndarray, dict] | tuple[None, dict]:
         """
         Fits a linear (first-degree polynomial) model to the data.
 
@@ -325,7 +390,9 @@ class CurveFitModels:
             return m * x + b
 
         init_params = [1.0, 0.0]
-        opt_params = sp.optimize.curve_fit(fit_function, x_avg, y_avg, p0=init_params, maxfev=1000)[0]
+        opt_params = sp.optimize.curve_fit(
+            fit_function, x_avg, y_avg, p0=init_params, maxfev=1000
+        )[0]
         m_fit, b_fit = map(float, opt_params)
         y_fit = fit_function(x_fit, m_fit, b_fit)
         return y_fit, {"m": m_fit, "b": b_fit}
@@ -336,22 +403,46 @@ class QQPlots:
     """"""
 
     @staticmethod
-    def qq_plot(empirical_q: float|np.ndarray, theoretical_q: float|np.ndarray, ax: plt.Axes, legend_txt: str,
-                use_log_scale: bool = True,
-                upper_band: float|np.ndarray|None = None,
-                lower_band: float|np.ndarray|None = None):
+    def qq_plot(
+        empirical_q: float | np.ndarray,
+        theoretical_q: float | np.ndarray,
+        ax: plt.Axes,
+        legend_txt: str,
+        use_log_scale: bool = True,
+        upper_band: float | np.ndarray | None = None,
+        lower_band: float | np.ndarray | None = None,
+    ):
         """"""
         # 1. 95% confidence band (approximate)
         # For n > 30, the 95% confidence envelope around the line y=x can be approximated as: ± 1.36 / sqrt(n)
         n = len(empirical_q) if isinstance(empirical_q, np.ndarray) else 1
         band = 1.36 / np.sqrt(n) if n > 0 else 0.0
-        upper_band = theoretical_q + band * theoretical_q if upper_band is None else upper_band
-        lower_band = theoretical_q - band * theoretical_q if lower_band is None else lower_band
+        upper_band = (
+            theoretical_q + band * theoretical_q if upper_band is None else upper_band
+        )
+        lower_band = (
+            theoretical_q - band * theoretical_q if lower_band is None else lower_band
+        )
 
         # 2. QQ Plot
-        ax.plot(theoretical_q, theoretical_q, 'r--', label="Identity Line")
-        ax.fill_between(theoretical_q, lower_band, upper_band, color="gray", alpha=0.2, label="95% Confidence Band")
-        ax.scatter(theoretical_q, empirical_q, alpha=0.7, edgecolor="k", linewidths=0.5, s=6, label=f"{legend_txt}")
+        ax.plot(theoretical_q, theoretical_q, "r--", label="Identity Line")
+        ax.fill_between(
+            theoretical_q,
+            lower_band,
+            upper_band,
+            color="gray",
+            alpha=0.2,
+            label="95% Confidence Band",
+        )
+        ax.scatter(
+            theoretical_q,
+            empirical_q,
+            alpha=0.7,
+            edgecolor="k",
+            linewidths=0.5,
+            s=6,
+            label=f"{legend_txt}",
+        )
         if use_log_scale:
             ax.set_xscale("log")
             ax.set_yscale("log")
@@ -361,7 +452,12 @@ class QQPlots:
         ax.set_frame_on(True)  # keep only small subplot borders visible
 
     @staticmethod
-    def log_qq_plot(distribution_data: np.ndarray, ax: plt.Axes, legend_txt: str, show_y_label: bool = False):
+    def log_qq_plot(
+        distribution_data: np.ndarray,
+        ax: plt.Axes,
+        legend_txt: str,
+        show_y_label: bool = False,
+    ):
         """
         Direct (unconditional) Q-Q plot comparing our samples to a log-normal distribution (or any other distribution).
         Direct comparison should tell us: "do the observed values distribution_data approximately follow a log-normal
@@ -381,7 +477,10 @@ class QQPlots:
 
         # 2. Fit Lognormal parameters (mu, sigma) via MLE on log(data)
         log_data = np.log(data)
-        mu, sigma = np.mean(log_data), np.std(log_data, ddof=1) # OR mu, sigma = sp.stats.norm.fit(log_data)
+        mu, sigma = (
+            np.mean(log_data),
+            np.std(log_data, ddof=1),
+        )  # OR mu, sigma = sp.stats.norm.fit(log_data)
 
         # 3. Compute theoretical quantiles from Lognormal inverse CDF
         quantiles = np.linspace(0.01, 0.99, len(data))
@@ -397,7 +496,12 @@ class QQPlots:
         return "Log Q–Q Plot (Lognormal)"
 
     @staticmethod
-    def gamma_qq_plot(distribution_data: np.ndarray, ax: plt.Axes, legend_txt: str, show_y_label: bool = False):
+    def gamma_qq_plot(
+        distribution_data: np.ndarray,
+        ax: plt.Axes,
+        legend_txt: str,
+        show_y_label: bool = False,
+    ):
         """
         Direct (unconditional) Q–Q plot comparing samples to a Gamma distribution.
 
@@ -426,11 +530,15 @@ class QQPlots:
         data = np.sort(data)
 
         # 2. Fit Gamma parameters (shape=k, loc, scale=θ) via MLE
-        shape_fit, loc_fit, scale_fit = stats.gamma.fit(data, floc=0)  # force loc=0 for stability
+        shape_fit, loc_fit, scale_fit = stats.gamma.fit(
+            data, floc=0
+        )  # force loc=0 for stability
 
         # 3. Compute theoretical quantiles from fitted Gamma inverse CDF
         quantiles = np.linspace(0.01, 0.99, len(data))
-        theoretical_q = stats.gamma.ppf(quantiles, a=shape_fit, loc=loc_fit, scale=scale_fit)
+        theoretical_q = stats.gamma.ppf(
+            quantiles, a=shape_fit, loc=loc_fit, scale=scale_fit
+        )
         empirical_q = np.quantile(data, quantiles)
 
         # 4. Generate the Q–Q plot
@@ -442,7 +550,12 @@ class QQPlots:
         return "Log Q–Q Plot (Gamma)"
 
     @staticmethod
-    def pwr_qq_plot(distribution_data: np.ndarray, ax: plt.Axes, legend_txt: str, show_y_label: bool = False):
+    def pwr_qq_plot(
+        distribution_data: np.ndarray,
+        ax: plt.Axes,
+        legend_txt: str,
+        show_y_label: bool = False,
+    ):
         """
         Unconditional Q–Q plot for a 1D sample against a power-law distribution. We are not fitting a model y = a * x^{-k},
         but instead testing if the empirical data (x) follow a power-law probability distribution:
@@ -481,7 +594,12 @@ class QQPlots:
         return "Log Q–Q Plot (Power Law)"
 
     @staticmethod
-    def stretched_pwr_qq_plot(distribution_data: np.ndarray, ax: plt.Axes, legend_txt: str, show_y_label: bool = False):
+    def stretched_pwr_qq_plot(
+        distribution_data: np.ndarray,
+        ax: plt.Axes,
+        legend_txt: str,
+        show_y_label: bool = False,
+    ):
         """
         Unconditional Q–Q Plot for Power-Law with Stretched-Exponential Cutoff distribution. We are testing if the empirical data (x)
         follow a stretched power-law probability distribution. It is unconditional because we do not have y for fitting
@@ -506,13 +624,19 @@ class QQPlots:
 
         def stretched_powerlaw_pdf(x, alpha, lamb_da, x_min):
             """PDF: p(x) ∝ x^(-alpha) * exp(-lambda * x), for x >= x_min"""
-            norm_const, _ = sp.integrate.quad(lambda t: t ** (-alpha) * np.exp(-lamb_da * t), x_min, np.inf)
+            norm_const, _ = sp.integrate.quad(
+                lambda t: t ** (-alpha) * np.exp(-lamb_da * t), x_min, np.inf
+            )
             return (x ** (-alpha)) * np.exp(-lamb_da * x) / norm_const
 
         def stretched_powerlaw_cdf(x, alpha, lamb_da, x_min):
             """Numerically integrate PDF to get CDF"""
-            norm_const, _ = sp.integrate.quad(lambda t: t ** (-alpha) * np.exp(-lamb_da * t), x_min, np.inf)
-            num, _ = sp.integrate.quad(lambda t: t ** (-alpha) * np.exp(-lamb_da * t), x_min, x)
+            norm_const, _ = sp.integrate.quad(
+                lambda t: t ** (-alpha) * np.exp(-lamb_da * t), x_min, np.inf
+            )
+            num, _ = sp.integrate.quad(
+                lambda t: t ** (-alpha) * np.exp(-lamb_da * t), x_min, x
+            )
             return num / norm_const
 
         def fit_stretched_powerlaw(x, x_min=None):
@@ -529,7 +653,9 @@ class QQPlots:
                 pdf_vals: np.ndarray = np.clip(pdf_vals, 1e-12, None)
                 return np.sum(np.log(pdf_vals)) * -1
 
-            result = sp.optimize.minimize(neg_log_likelihood, x0=[2.0, 0.1], bounds=[(1.01, 10), (1e-6, 10)])
+            result = sp.optimize.minimize(
+                neg_log_likelihood, x0=[2.0, 0.1], bounds=[(1.01, 10), (1e-6, 10)]
+            )
             alpha_fit, lambda_fit = result.x
             return alpha_fit, lambda_fit, x_min
 
@@ -543,7 +669,9 @@ class QQPlots:
 
         # 3. Compute CDF for stretched power-law
         x_grid = np.linspace(min_x, data.max(), 2000)
-        cdf_vals = np.array([stretched_powerlaw_cdf(xi, alpha_hat, lambda_hat, min_x) for xi in x_grid])
+        cdf_vals = np.array(
+            [stretched_powerlaw_cdf(xi, alpha_hat, lambda_hat, min_x) for xi in x_grid]
+        )
         inv_cdf = sp.interpolate.interp1d(cdf_vals, x_grid, fill_value="extrapolate")
 
         # 4. Empirical quantiles from inverse CDF
@@ -560,7 +688,14 @@ class QQPlots:
         return "Log Q–Q Plot (Power Law w. Expon. Cutoff)"
 
     @staticmethod
-    def conditional_plots(x: np.ndarray, y: np.ndarray, ax: plt.Axes, legend_txt: str, model_type: str, show_y_label: bool = False):
+    def conditional_plots(
+        x: np.ndarray,
+        y: np.ndarray,
+        ax: plt.Axes,
+        legend_txt: str,
+        model_type: str,
+        show_y_label: bool = False,
+    ):
         """
         Conditional log plots for lognormal/power-law/stretched power-law models.
 
@@ -586,7 +721,7 @@ class QQPlots:
             y_fit, params = CurveFitModels.lognormal(x, y, x_fit)
         elif model_type == "gamma":
             model_name = "Gamma"
-            y_fit, params = CurveFitModels.gamma(x, y, x_fit)
+            y_fit, _params = CurveFitModels.gamma(x, y, x_fit)
         else:
             return None
 
@@ -595,7 +730,7 @@ class QQPlots:
 
         # 2. Plot
         ax.scatter(np.log(x), np.log(y), s=10, alpha=0.5, label=f"{legend_txt}")
-        ax.plot(np.log(x_fit), np.log(y_fit), 'r', label="fitted curve")
+        ax.plot(np.log(x_fit), np.log(y_fit), "r", label="fitted curve")
         # ax.plot(df["logN"], mu_hat + sigma_hat, 'g--', label="+1σ")
         # ax.plot(df["logN"], mu_hat - sigma_hat, 'g--', label="-1σ")
         ax.tick_params(labelsize=5)
@@ -609,23 +744,24 @@ class QQPlots:
         return f"Conditional Fit ({model_name})"
 
 
-
-def sgt_excel_to_dataframe(excel_dir_path: str, allowed_ext: str = ".xlsx") -> dict[str, pd.DataFrame] | None:
+def sgt_excel_to_dataframe(
+    excel_dir_path: str, allowed_ext: str = ".xlsx"
+) -> dict[str, pd.DataFrame] | None:
     """
-        Loads multiple Excel files generated by the StructuralGT–Scaling Behavior module into Pandas DataFrames.
+    Loads multiple Excel files generated by the StructuralGT–Scaling Behavior module into Pandas DataFrames.
 
-        This function scans the specified directory for Excel files with the given extension,
-        reads each file into a Pandas DataFrame, and stores the results in a dictionary
-        where the keys are file names (without extensions).
+    This function scans the specified directory for Excel files with the given extension,
+    reads each file into a Pandas DataFrame, and stores the results in a dictionary
+    where the keys are file names (without extensions).
 
-        Args:
-            excel_dir_path (str): Path to the directory containing Excel files
-            allowed_ext (str, optional): Allowed file extension (default: ".xlsx")
+    Args:
+        excel_dir_path (str): Path to the directory containing Excel files
+        allowed_ext (str, optional): Allowed file extension (default: ".xlsx")
 
-        Returns:
-            dict[str, pd.DataFrame] | None:
-                A dictionary mapping each file name (without extension) to its corresponding
-                DataFrame, or None if no valid Excel files are found.
+    Returns:
+        dict[str, pd.DataFrame] | None:
+            A dictionary mapping each file name (without extension) to its corresponding
+            DataFrame, or None if no valid Excel files are found.
     """
 
     if excel_dir_path is None:
@@ -668,7 +804,9 @@ def sgt_excel_to_dataframe(excel_dir_path: str, allowed_ext: str = ".xlsx") -> d
             # Append Excel data to one place
             for sheet_name, df in file_sheets.items():
                 # Rename it if sheet_name exists in mapping
-                new_name = rename_map.get(sheet_name, sheet_name)  # returns the old name if not found in mapping
+                new_name = rename_map.get(
+                    sheet_name, sheet_name
+                )  # returns the old name if not found in mapping
 
                 # Add the Material column with the file name (without extension)
                 df = df.copy()
@@ -685,7 +823,9 @@ def sgt_excel_to_dataframe(excel_dir_path: str, allowed_ext: str = ".xlsx") -> d
     return all_sheets
 
 
-def sgt_csv_to_dataframe(csv_dir_path: str, delimiter: str = ",") -> dict[str, pd.DataFrame] | None:
+def sgt_csv_to_dataframe(
+    csv_dir_path: str, delimiter: str = ","
+) -> dict[str, pd.DataFrame] | None:
     """
     Loads multiple CSV files generated by the StructuralGT–Scaling Behavior module into pandas DataFrames.
 
@@ -724,7 +864,12 @@ def sgt_csv_to_dataframe(csv_dir_path: str, delimiter: str = ",") -> dict[str, p
     return all_sheets
 
 
-def sgt_spider_plot(df_sgt: pd.DataFrame, gt_params: list[str], material_labels: dict|None=None, grid_levels: int = 6) -> None | plt.Figure:
+def sgt_spider_plot(
+    df_sgt: pd.DataFrame,
+    gt_params: list[str],
+    material_labels: dict | None = None,
+    grid_levels: int = 6,
+) -> None | plt.Figure:
     """
     Generates a spider (radar) plot to compare Graph-Theoretic (GT) parameters
     across multiple material samples, typically derived from SEM images.
@@ -788,15 +933,15 @@ def sgt_spider_plot(df_sgt: pd.DataFrame, gt_params: list[str], material_labels:
     def format_scale_value(value):
         """Format numbers with K, M abbreviations"""
         if abs(value) >= 1_000_000:
-            return f'{value / 1_000_000:.1f}M'
+            return f"{value / 1_000_000:.1f}M"
         elif abs(value) >= 1_000:
-            return f'{value / 1_000:.1f}K'
+            return f"{value / 1_000:.1f}K"
         elif abs(value) >= 100:
-            return f'{value:.0f}'
+            return f"{value:.0f}"
         elif abs(value) >= 10:
-            return f'{value:.1f}'
+            return f"{value:.1f}"
         else:
-            return f'{value:.2f}'
+            return f"{value:.2f}"
 
     def shift_value(val):
         """Shift value so that the Spider Plot center is at the minimum value."""
@@ -858,10 +1003,10 @@ def sgt_spider_plot(df_sgt: pd.DataFrame, gt_params: list[str], material_labels:
     compute_gt_avg()
 
     # Filter and pivot
-    df_avg = df_sgt.pivot(index='Material', columns='parameter', values='Avg.')
+    df_avg = df_sgt.pivot(index="Material", columns="parameter", values="Avg.")
     df_avg = df_avg[gt_params]  # Ensure selected parameters and consistent order
-    if 'Std. Dev.' in df_sgt.columns:
-        df_std = df_sgt.pivot(index='Material', columns='parameter', values='Std. Dev.')
+    if "Std. Dev." in df_sgt.columns:
+        df_std = df_sgt.pivot(index="Material", columns="parameter", values="Std. Dev.")
         df_std = df_std[gt_params]
     else:
         df_std = None
@@ -876,9 +1021,11 @@ def sgt_spider_plot(df_sgt: pd.DataFrame, gt_params: list[str], material_labels:
 
     # Determine max_val based on data
     all_values = []
-    for key in material_labels.keys():
+    for key in material_labels:
         vals = df_avg.loc[key]
-        values = np.atleast_1d(vals) # Convert to numpy arrays (handles both scalars and sequences)
+        values = np.atleast_1d(
+            vals
+        )  # Convert to numpy arrays (handles both scalars and sequences)
 
         if df_std is not None:
             err = df_std.loc[key]
@@ -887,7 +1034,7 @@ def sgt_spider_plot(df_sgt: pd.DataFrame, gt_params: list[str], material_labels:
         else:
             all_values.extend(np.array(values))
     max_val = max(all_values)
-    min_val: int = min(-max_val//2, min(all_values))
+    min_val: int = min(-max_val // 2, min(all_values))
     levels = compute_grid_scale()
 
     # Draw grid lines (polygon grid)
@@ -895,15 +1042,29 @@ def sgt_spider_plot(df_sgt: pd.DataFrame, gt_params: list[str], material_labels:
         shifted_level = shift_value(level)
         x_grid = shifted_level * np.cos(np.append(angles, angles[0]))
         y_grid = shifted_level * np.sin(np.append(angles, angles[0]))
-        ax.plot(x_grid, y_grid, 'k-', linewidth=0.5, alpha=0.3)
+        ax.plot(x_grid, y_grid, "k-", linewidth=0.5, alpha=0.3)
         # Add the scale value label below the gridline (at the bottom-most point)
         scale_val = format_scale_value(level)
-        ax.text(0.1, shifted_level, scale_val, ha='left', va='bottom', fontsize=8, alpha=0.75)
+        ax.text(
+            0.1,
+            shifted_level,
+            scale_val,
+            ha="left",
+            va="bottom",
+            fontsize=8,
+            alpha=0.75,
+        )
 
     # Draw axes from the center to each vertex
     max_shifted = shift_value(max(levels))
     for angle in angles:
-        ax.plot([0, max_shifted * np.cos(angle)], [0, max_shifted * np.sin(angle)], 'k-', linewidth=0.5, alpha=0.5)
+        ax.plot(
+            [0, max_shifted * np.cos(angle)],
+            [0, max_shifted * np.sin(angle)],
+            "k-",
+            linewidth=0.5,
+            alpha=0.5,
+        )
 
     # Plot each material
     for key, material_name in material_labels.items():
@@ -920,7 +1081,7 @@ def sgt_spider_plot(df_sgt: pd.DataFrame, gt_params: list[str], material_labels:
         dy_perp = np.cos(angles)
 
         # Draw the polygon line and capture color
-        poly_line, = ax.plot([*x, x[0]], [*y, y[0]], linewidth=1.5)
+        (poly_line,) = ax.plot([*x, x[0]], [*y, y[0]], linewidth=1.5)
         color = poly_line.get_color()
 
         # Fill polygon
@@ -967,35 +1128,47 @@ def sgt_spider_plot(df_sgt: pd.DataFrame, gt_params: list[str], material_labels:
         else:
             display_angle = 0
         ax.text(
-            x_label, y_label, param,
-            ha='center', va='center',
+            x_label,
+            y_label,
+            param,
+            ha="center",
+            va="center",
             fontsize=14,
-            fontweight='bold',
+            fontweight="bold",
             rotation=display_angle,  # Apply the tilt
-            rotation_mode='anchor'  # Ensures rotation is around the text center
+            rotation_mode="anchor",  # Ensures rotation is around the text center
         )
 
     # Set equal aspect ratio and limits
-    ax.set_aspect('equal')
+    ax.set_aspect("equal")
     limit = max_shifted * 1.3
     limit = shift_value(limit)
     ax.set_xlim(-limit, limit)
     ax.set_ylim(-limit, limit)
 
     # Remove axes
-    ax.axis('off')
+    ax.axis("off")
 
     # Set title and legend position
     if df_std is not None:
-        ax.set_title("StructuralGT Spider Plot with STD Error Bars", fontsize=16, pad=20)
+        ax.set_title(
+            "StructuralGT Spider Plot with STD Error Bars", fontsize=16, pad=20
+        )
     else:
         ax.set_title("StructuralGT Spider Plot", fontsize=16, pad=20)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.0, 1.0), fontsize=14)
+    ax.legend(loc="upper right", bbox_to_anchor=(1.0, 1.0), fontsize=14)
     fig.tight_layout()
     return fig
 
 
-def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip_test: bool = False, fit_func: str | None = None, qq_plot: bool = True) -> None | plt.Figure:
+def sgt_scaling_plot(
+    y_title: str,
+    df_data: pd.DataFrame,
+    mat_labels: dict,
+    skip_test: bool = False,
+    fit_func: str | None = None,
+    qq_plot: bool = True,
+) -> None | plt.Figure:
     """
     Generates a scaling plot showing error bars for a sample material and displays
     corresponding Kolmogorov–Smirnov test results for different statistical fits (PowerLaw, Exponential, Lognormal).
@@ -1034,11 +1207,11 @@ def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip
             "Log Normal": stats.lognorm,
             "Gamma": stats.gamma,
             "Weibull": stats.weibull_min,
-            #"Stretched Power Law": stretched_powerlaw, ## HAS ERROR
+            # "Stretched Power Law": stretched_powerlaw, ## HAS ERROR
         }
 
         # Prepare arguments for each parallel process
-        data = df_distribution['y-avg'].to_numpy()
+        data = df_distribution["y-avg"].to_numpy()
         args_list = [(name, dist, data) for name, dist in distributions.items()]
 
         # Use multiprocessing pool
@@ -1057,7 +1230,7 @@ def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip
                 fmt_text += f"  {row['name']} → KS={row['ks']:.3f}, p={row['p']:.3f}\n"
         return fmt_text
 
-    def gen_qq_plot(model_name: str|None) -> str:
+    def gen_qq_plot(model_name: str | None) -> str:
         """
         Generate Q–Q or conditional plots for different models.
 
@@ -1076,7 +1249,7 @@ def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip
             "lognorm": QQPlots.log_qq_plot,
             "gamma": QQPlots.gamma_qq_plot,
             "powerlaw": QQPlots.pwr_qq_plot,
-            "powerlaw-ec": QQPlots.stretched_pwr_qq_plot
+            "powerlaw-ec": QQPlots.stretched_pwr_qq_plot,
         }
 
         # Check model name validity
@@ -1090,7 +1263,9 @@ def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip
         if qq_plot:
             ax_title = qq_funcs[model_name](y_avg, ax, material_name, is_left)
         else:
-            ax_title = QQPlots.conditional_plots(x_avg, y_avg, ax, material_name, model_name, is_left)
+            ax_title = QQPlots.conditional_plots(
+                x_avg, y_avg, ax, material_name, model_name, is_left
+            )
             ax_title = "" if ax_title is None else ax_title
 
         return ax_title
@@ -1098,22 +1273,22 @@ def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip
     if y_title is None or df_data is None or mat_labels is None:
         return None
 
-    if y_title == "Kernel Size" and 'kernel-dim' in df_data.columns:
+    if y_title == "Kernel Size" and "kernel-dim" in df_data.columns:
         df_data = df_data.copy()
-        df_data['y-avg'] = df_data['kernel-dim']
-        df_data['y-std'] = 0.0
+        df_data["y-avg"] = df_data["kernel-dim"]
+        df_data["y-std"] = 0.0
 
     # Use pyplot figure so plt.show() works properly
     fig = plt.figure(figsize=(11, 8.5), dpi=300)
     # Main 2x2 grid
     gs = fig.add_gridspec(2, 2)
-    ax_1 = fig.add_subplot(gs[0, 0])         # Actual data with error bars
-    ax_2 = fig.add_subplot(gs[0, 1])         # goodness-of-fit test results
+    ax_1 = fig.add_subplot(gs[0, 0])  # Actual data with error bars
+    ax_2 = fig.add_subplot(gs[0, 1])  # goodness-of-fit test results
     ax_3 = None
     ax_4 = None
     ax_4_grids, i, ax_4_title = [], 0, ""
     if type(fit_func) == str:
-        ax_3 = fig.add_subplot(gs[1, 0])     # Curve fits with selected distributions
+        ax_3 = fig.add_subplot(gs[1, 0])  # Curve fits with selected distributions
 
         if fit_func in ["lognorm", "powerlaw", "powerlaw-ec", "gamma"]:
             ax_4 = fig.add_subplot(gs[1, 1])
@@ -1128,7 +1303,7 @@ def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip
     # --- Plot data and compute KS test statistics ---
     txt_test = "Kolmogorov–Smirnov & P-Values\n\n"
     for key, material_name in mat_labels.items():
-        df_sample = df_data[df_data['Material'] == key].copy()
+        df_sample = df_data[df_data["Material"] == key].copy()
         if df_sample.empty:
             continue
 
@@ -1139,38 +1314,55 @@ def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip
 
         # Plot Curves fitted to specific distributions
         if ax_3 is not None:
-            x_avg = pd.Series(df_sample['x-avg']).to_numpy()
-            y_avg = pd.Series(df_sample['y-avg']).to_numpy()
+            x_avg = pd.Series(df_sample["x-avg"]).to_numpy()
+            y_avg = pd.Series(df_sample["y-avg"]).to_numpy()
             x_fit = np.linspace(min(x_avg), max(max(x_avg), 10000), 100)
             y_fit, axis_label = None, ""
             if fit_func == "lognorm":
                 y_fit, params = CurveFitModels.lognormal(x_avg, y_avg, x_fit)
-                mu_fit, sigma_fit, a_log_fit = params["mu"], params["sigma"], params["a"]
-                axis_label = f'{material_name}: a={a_log_fit:.2f}, $\\mu={mu_fit:.3f}$, $\\sigma={sigma_fit:.3f}$'
+                mu_fit, sigma_fit, a_log_fit = (
+                    params["mu"],
+                    params["sigma"],
+                    params["a"],
+                )
+                axis_label = f"{material_name}: a={a_log_fit:.2f}, $\\mu={mu_fit:.3f}$, $\\sigma={sigma_fit:.3f}$"
             elif fit_func == "gamma":
                 y_fit, params = CurveFitModels.gamma(x_avg, y_avg, x_fit)
-                a_fit, alpha_fit, theta_fit = params["a"], params["alpha"], params["theta"]
-                axis_label = f'{material_name}: a={a_fit:.2f}, $\\alpha={alpha_fit:.2f}, \\theta={theta_fit:.2f}$'
+                a_fit, alpha_fit, theta_fit = (
+                    params["a"],
+                    params["alpha"],
+                    params["theta"],
+                )
+                axis_label = f"{material_name}: a={a_fit:.2f}, $\\alpha={alpha_fit:.2f}, \\theta={theta_fit:.2f}$"
             elif fit_func == "powerlaw":
                 y_fit, params = CurveFitModels.power_law(x_avg, y_avg, x_fit)
                 a_fit, k_fit = params["a"], params["k"]
-                axis_label = f'{material_name}: $a={a_fit:.3f}, k={k_fit:.3f}$'
+                axis_label = f"{material_name}: $a={a_fit:.3f}, k={k_fit:.3f}$"
             elif fit_func == "powerlaw-ec":
                 y_fit, params = CurveFitModels.stretched_power_law(x_avg, y_avg, x_fit)
-                a_fit, k_fit, cut_fit, beta_fit = params["a"], params["k"], params["x_c"], params["beta"]
-                axis_label = f'{material_name}: $a={a_fit:.3f}, k={k_fit:.3f}, x_c={cut_fit:.3f}, \\beta={beta_fit:.3f}$'
+                a_fit, k_fit, cut_fit, beta_fit = (
+                    params["a"],
+                    params["k"],
+                    params["x_c"],
+                    params["beta"],
+                )
+                axis_label = f"{material_name}: $a={a_fit:.3f}, k={k_fit:.3f}, x_c={cut_fit:.3f}, \\beta={beta_fit:.3f}$"
             elif fit_func == "linear":
                 y_fit, params = CurveFitModels.linear(x_avg, y_avg, x_fit)
                 slope_fit, intercept_fit = params["m"], params["b"]
-                axis_label = f'{material_name}: $slope={slope_fit:.3f}, b={intercept_fit:.3f}$'
+                axis_label = (
+                    f"{material_name}: $slope={slope_fit:.3f}, b={intercept_fit:.3f}$"
+                )
             elif fit_func == "exponential":
                 y_fit, params = CurveFitModels.exponential(x_avg, y_avg, x_fit)
-                a_fit, b_fit, c_fit = params["a"], params["lambda"], params["c"]
-                axis_label = f'{material_name}: $a={a_fit:.3f}, b={b_fit:.3f}$'
-            ax_3.plot(x_fit, y_fit, label=axis_label, linestyle='-') if y_fit is not None else None
+                a_fit, b_fit, _c_fit = params["a"], params["lambda"], params["c"]
+                axis_label = f"{material_name}: $a={a_fit:.3f}, b={b_fit:.3f}$"
+            ax_3.plot(
+                x_fit, y_fit, label=axis_label, linestyle="-"
+            ) if y_fit is not None else None
 
             if i < len(ax_4_grids):
-                is_left = True if i in (0, 2) else False
+                is_left = i in (0, 2)
                 ax_4_title = gen_qq_plot(fit_func)
                 i += 1
 
@@ -1181,11 +1373,11 @@ def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip
             last_row_dict = df_sample.iloc[-1].to_dict()
             # --- Delete last row ---
             df_sample = df_sample.iloc[:-1].copy()
-            ax_1.scatter(last_row_dict['x-avg'], last_row_dict['y-avg'], marker='x')
+            ax_1.scatter(last_row_dict["x-avg"], last_row_dict["y-avg"], marker="x")
             # Add Horizontal Line
             ax_1.axhline(
-                y=last_row_dict['y-avg'],
-                linestyle='--',
+                y=last_row_dict["y-avg"],
+                linestyle="--",
                 linewidth=0.2,
                 # label=f"y = {last_row_dict['y-avg']:.2f}"
             )
@@ -1193,36 +1385,38 @@ def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip
 
         # Error-bar plot
         ax_1.errorbar(
-            df_sample['x-avg'],
-            df_sample['y-avg'],
-            yerr=df_sample['y-std'],
-            xerr=df_sample['x-std'],
+            df_sample["x-avg"],
+            df_sample["y-avg"],
+            yerr=df_sample["y-std"],
+            xerr=df_sample["x-std"],
             label=material_name if legend_label is None else legend_label,
-            marker='o',
+            marker="o",
             capsize=3,
-            linestyle='-'
+            linestyle="-",
         )
 
     # --- Format main plot ---
-    ax_1.set_xlabel('Node Count', fontsize=12)
+    ax_1.set_xlabel("Node Count", fontsize=12)
     ax_1.set_ylabel(y_title, fontsize=12)
-    ax_1.set_title(f'Nodes vs {y_title} (Actual Data)', fontsize=14)
+    ax_1.set_title(f"Nodes vs {y_title} (Actual Data)", fontsize=14)
     ax_1.legend(frameon=False)
-    ax_1.grid(True, linestyle='--', linewidth=0.6, alpha=0.7)  # cleaner grid
+    ax_1.grid(True, linestyle="--", linewidth=0.6, alpha=0.7)  # cleaner grid
 
     if skip_test:
         txt_test += "Goodness-of-fit tests skipped."
 
     # --- Create a text-only subplot (no axes, no borders) ---
-    ax_2.axis('off')  # hides axes, ticks, and frame
+    ax_2.axis("off")  # hides axes, ticks, and frame
     ax_2.text(
-        0.0, 1.0, txt_test,
+        0.0,
+        1.0,
+        txt_test,
         fontsize=8,
-        verticalalignment='top',
-        horizontalalignment='left',
-        family='monospace',
+        verticalalignment="top",
+        horizontalalignment="left",
+        family="monospace",
         transform=ax_2.transAxes,
-        color='black'
+        color="black",
     )
 
     # --- Draw curve fits using selected distributions (power-law or log-normal or exponential)
@@ -1231,46 +1425,46 @@ def sgt_scaling_plot(y_title: str, df_data: pd.DataFrame, mat_labels: dict, skip
             ax_3.set_title(
                 r"LogNormal Fit: $y = a \cdot \frac{1}{x\sigma\sqrt{2\pi}} e^{-\frac{(\ln{x}-\mu)^2}{2\sigma^2}}$"
                 f"\nNodes vs {y_title}",
-                fontsize=10
+                fontsize=10,
             )
         elif fit_func == "gamma":
             ax_3.set_title(
                 r"Gamma Fit: $y = a \cdot \frac{x^{\alpha-1}}{\Gamma(\alpha)}\cdot \frac{\exp(-\frac{x}{\theta})}{"
                 r"\Gamma(\alpha)\theta^{\alpha}}$"
                 f"\nNodes vs {y_title}",
-                fontsize=10
+                fontsize=10,
             )
         elif fit_func == "powerlaw":
             ax_3.set_title(
                 r"PowerLaw Fit: $y = a \cdot x^{-k}$"
                 f"\nNodes vs {y_title}",
-                fontsize=10
+                fontsize=10,
             )
         elif fit_func == "powerlaw-ec":
             ax_3.set_title(
                 r"Stretched PowerLaw Fit: $y = a \cdot x^{-k} \cdot \exp((\frac{-x}{x_c})^{\beta})$"
                 f"\nNodes vs {y_title}",
-                fontsize=10
+                fontsize=10,
             )
         elif fit_func == "linear":
             ax_3.set_title(
                 r"Linear Fit: $y = m(x) + b$"
                 f"\nNodes vs {y_title}",
-                fontsize=10
+                fontsize=10,
             )
         elif fit_func == "exponential":
             ax_3.set_title(
                 r"Exponential Fit: $y = a \cdot e^{-\frac{x}{\lambda}} + c$"
                 f"\nNodes vs {y_title}",
-                fontsize=10
+                fontsize=10,
             )
         else:
             fig.tight_layout()
             return fig
-        ax_3.set_xlabel('Node Count', fontsize=12)
+        ax_3.set_xlabel("Node Count", fontsize=12)
         ax_3.set_ylabel(y_title, fontsize=12)
         ax_3.legend(frameon=False, fontsize=8)
-        ax_3.grid(True, linestyle='--', linewidth=0.6, alpha=0.7)  # cleaner grid
+        ax_3.grid(True, linestyle="--", linewidth=0.6, alpha=0.7)  # cleaner grid
 
         if ax_4 is not None:
             ax_4.axis("off")  # hide all ticks and labels
