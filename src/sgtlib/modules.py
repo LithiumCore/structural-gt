@@ -6,6 +6,7 @@ A group of algorithms and functions for Graph Theory analysis on microscopy imag
 
 # MODULES
 from .apps.lib_app import ExpressGT
+from .compute.compass_adapter import CompassGraphAdapter
 from .compute.graph_analyzer import GraphAnalyzer
 from .imaging.base_image import BaseImage
 from .imaging.image_processor import (
@@ -53,6 +54,7 @@ __all__ = [
     "ALLOWED_GRAPH_FILE_EXTENSIONS",
     "ALLOWED_IMG_EXTENSIONS",
     "BaseImage",
+    "CompassGraphAdapter",
     "CurveFitModels",
     "ExpressGT",
     "FiberNetworkBuilder",

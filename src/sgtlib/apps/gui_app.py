@@ -47,6 +47,9 @@ class PySideApp(QObject):
             "graphComputeModel", self._ctrl.graph_ctrl.graphComputeModel
         )
         self._ui_engine.rootContext().setContextProperty(
+            "graphComparisonModel", self._ctrl.graph_ctrl.graphComparisonModel
+        )
+        self._ui_engine.rootContext().setContextProperty(
             "gteTreeModel", self._ctrl.graph_ctrl.gteTreeModel
         )
         self._ui_engine.rootContext().setContextProperty(

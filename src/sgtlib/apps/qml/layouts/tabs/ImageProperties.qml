@@ -102,6 +102,35 @@ Rectangle {
                 visible: graphComputeModel.rowCount() <= 0
             }
             GTPropertyWidget{}
+
+            Rectangle {
+                height: 1
+                color: Theme.lightGray
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 20
+                Layout.leftMargin: 20
+                Layout.rightMargin: 20
+            }
+
+            Text {
+                text: "Dickson vs COMPASS"
+                font.pixelSize: 12
+                font.bold: true
+                color: Theme.text
+                Layout.topMargin: 10
+                Layout.bottomMargin: 5
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Label {
+                id: lblNoComparison
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 20
+                text: "No comparisons selected."
+                color: Theme.gray
+                visible: graphComparisonModel.rowCount() <= 0
+            }
+            GTComparisonWidget{}
         }
     }
 
@@ -112,12 +141,14 @@ Rectangle {
             lblNoImgProps.visible = imagePropsModel.rowCount() <= 0;
             lblNoGraphProps.visible = graphPropsModel.rowCount() <= 0;
             lblNoGraphParams.visible = graphComputeModel.rowCount() <= 0;
+            lblNoComparison.visible = graphComparisonModel.rowCount() <= 0;
         }
 
         function onTaskTerminatedSignal(success_val, msg_data){
             lblNoImgProps.visible = imagePropsModel.rowCount() <= 0;
             lblNoGraphProps.visible = graphPropsModel.rowCount() <= 0;
             lblNoGraphParams.visible = graphComputeModel.rowCount() <= 0;
+            lblNoComparison.visible = graphComparisonModel.rowCount() <= 0;
         }
 
     }

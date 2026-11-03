@@ -62,6 +62,7 @@
         "widgets/RescaleControlWidget.qml",
         "widgets/GraphPropertyWidget.qml",
         "widgets/GTPropertyWidget.qml",
+        "widgets/GTComparisonWidget.qml",
         "widgets/CreateProjectWidget.qml",
         "widgets/LoadingSpinnerOverlay.qml",
         "widgets/AIModeWidget.qml"

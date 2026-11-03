@@ -495,6 +495,18 @@ def load_gte_configs(cfg_path: str = ""):
 def load_gtc_configs(cfg_path: str = ""):
     """Networkx Calculation Settings"""
 
+    comparison_labels = {
+        "number_of_nodes": "Number of Nodes",
+        "number_of_edges": "Number of Edges",
+        "diameter": "Diameter",
+        "density": "Graph Density",
+        "average_degree": "Average Degree",
+        "average_clustering": "Average Clustering Coefficient",
+        "degree_assortativity": "Degree Assortativity",
+        "average_closeness": "Average Closeness",
+        "average_node_betweenness": "Average Node Betweenness",
+    }
+
     options_gtc: dict[str, dict[str, str | int | float]] = {
         "display_heatmaps": {
             "id": "display_heatmaps",
@@ -631,6 +643,15 @@ def load_gtc_configs(cfg_path: str = ""):
         # "computing_lang": {"id": "computing_lang", "type": "gt-metric", "text": "Programming Language", "value": 'Py'}
     }
 
+    for metric_key, label in comparison_labels.items():
+        option_id = f"compare_compass_{metric_key}"
+        options_gtc[option_id] = {
+            "id": option_id,
+            "type": "gt-metric",
+            "text": f"Compare with COMPASS: {label}",
+            "value": 0,
+        }
+
     # Load configuration from the file
     config = read_config_file(cfg_path)
     if config is None:
@@ -703,6 +724,11 @@ def load_gtc_configs(cfg_path: str = ""):
         options_gtc["scaling_behavior_log_normal_fit"]["value"] = int(
             config.get("sgt-settings", "scaling_behavior_log_normal_fit")
         )
+        for option_id in options_gtc:
+            if option_id.startswith("compare_compass_"):
+                options_gtc[option_id]["value"] = int(
+                    config.get("sgt-settings", option_id, fallback="0")
+                )
         # options_gtc["computing_lang"]["value"] = str(config.get('sgt-settings', 'computing_lang'))
 
         return options_gtc

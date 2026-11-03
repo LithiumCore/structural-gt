@@ -42,6 +42,7 @@ from networkx.algorithms.wiener import wiener_index
 from ..imaging.image_processor import ImageProcessor
 from ..networks.fiber_network import FiberNetworkBuilder
 from ..utils.config_loader import load_gtc_configs
+from .metric_comparison import compute_metric_comparison, dickson_metric_value
 from ..utils.gen_plots import CurveFitModels
 from ..utils.sgt_utils import (
     AbortException,
@@ -137,6 +138,8 @@ class GraphAnalyzer(ProgressUpdate):
         self._plot_figures: list | None = None
         self._results_df: None | pd.DataFrame = None
         self._weighted_results_df: None | pd.DataFrame = None
+        self._comparison_results: None | pd.DataFrame = None
+        self._dickson_metric_cache: dict = {}
         self._scaling_results: dict = {}
         self._persistent_homology_data: dict[str, None | list | np.ndarray] = {
             "persistent_homology": None,
@@ -200,6 +203,11 @@ class GraphAnalyzer(ProgressUpdate):
         return self._weighted_results_df
 
     @property
+    def comparison_results(self) -> pd.DataFrame | None:
+        """Return paired Dickson and COMPASS metric results."""
+        return self._comparison_results
+
+    @property
     def scaling_results(self) -> dict:
         return self._scaling_results
 
@@ -238,6 +246,26 @@ class GraphAnalyzer(ProgressUpdate):
         self._results_df = self.compute_gt_metrics(
             graph_obj.nx_giant_graph
         )  # replace with graph_obj.nx_giant_graph
+
+        selected_comparisons = [
+            option_id.removeprefix("compare_compass_")
+            for option_id, option in self._configs.items()
+            if option_id.startswith("compare_compass_") and option["value"] == 1
+        ]
+        self._comparison_results = None
+        if selected_comparisons:
+            self.update_status(
+                ProgressData(
+                    percent=75,
+                    sender="GT",
+                    message="Comparing selected COMPASS metrics...",
+                )
+            )
+            self._comparison_results = compute_metric_comparison(
+                graph_obj.nx_giant_graph,
+                selected_comparisons,
+                dickson_cache=self._dickson_metric_cache,
+            )
 
         # 3b. Compute Scaling Scatter Plots
         scaling_data = None
@@ -292,6 +320,8 @@ class GraphAnalyzer(ProgressUpdate):
         if graph is None:
             return None
 
+        self._dickson_metric_cache = {}
+
         if not silent:
             self.update_status(
                 ProgressData(
@@ -304,8 +334,12 @@ class GraphAnalyzer(ProgressUpdate):
         opt_gtc = self._configs
         data_dict = {"parameter": [], "value": []}
 
-        node_count = int(nx.number_of_nodes(graph))
-        edge_count = int(nx.number_of_edges(graph))
+        node_count = int(
+            dickson_metric_value(graph, "number_of_nodes", self._dickson_metric_cache)
+        )
+        edge_count = int(
+            dickson_metric_value(graph, "number_of_edges", self._dickson_metric_cache)
+        )
 
         data_dict["parameter"].append("Number of nodes")
         data_dict["value"].append(node_count)
@@ -360,7 +394,14 @@ class GraphAnalyzer(ProgressUpdate):
             if save_histogram:
                 self._histogram_data["degree_distribution"] = deg_distribution
             data_dict["parameter"].append("Average degree")
-            data_dict["value"].append(round(np.average(deg_distribution), 5))
+            data_dict["value"].append(
+                round(
+                    dickson_metric_value(
+                        graph, "average_degree", self._dickson_metric_cache
+                    ),
+                    5,
+                )
+            )
 
         is_connected = False
         if (opt_gtc["compute_network_diameter"]["value"] == 1) or (
@@ -380,7 +421,11 @@ class GraphAnalyzer(ProgressUpdate):
                     )
                 )
             if is_connected:
-                dia = int(diameter(graph))
+                dia = int(
+                    dickson_metric_value(
+                        graph, "diameter", self._dickson_metric_cache
+                    )
+                )
             else:
                 dia = np.nan
             data_dict["parameter"].append("Network diameter")
@@ -414,7 +459,9 @@ class GraphAnalyzer(ProgressUpdate):
                         percent=20, sender="GT", message="Computing graph density..."
                     )
                 )
-            g_density = nx.density(graph)
+            g_density = dickson_metric_value(
+                graph, "density", self._dickson_metric_cache
+            )
             g_density = round(g_density, 5)
             data_dict["parameter"].append("Graph density")
             data_dict["value"].append(g_density)
@@ -463,7 +510,9 @@ class GraphAnalyzer(ProgressUpdate):
                         message="Computing assortativity coefficient...",
                     )
                 )
-            a_coef = degree_assortativity_coefficient(graph)
+            a_coef = dickson_metric_value(
+                graph, "degree_assortativity", self._dickson_metric_cache
+            )
             a_coef = round(a_coef, 5)
             data_dict["parameter"].append("Assortativity coefficient")
             data_dict["value"].append(a_coef)
@@ -484,7 +533,14 @@ class GraphAnalyzer(ProgressUpdate):
                 if save_histogram:
                     self._histogram_data["clustering_coefficients"] = cl_coefficients
                 data_dict["parameter"].append("Average clustering coefficient")
-                data_dict["value"].append(round(np.average(cl_coefficients), 5))
+                data_dict["value"].append(
+                    round(
+                        dickson_metric_value(
+                            graph, "average_clustering", self._dickson_metric_cache
+                        ),
+                        5,
+                    )
+                )
 
         # calculating betweenness centrality histogram
         if opt_gtc["display_betweenness_centrality_histogram"]["value"] == 1:
@@ -501,7 +557,16 @@ class GraphAnalyzer(ProgressUpdate):
             if save_histogram:
                 self._histogram_data["betweenness_distribution"] = b_distribution
             data_dict["parameter"].append("Average betweenness centrality")
-            data_dict["value"].append(round(np.average(b_distribution), 5))
+            data_dict["value"].append(
+                round(
+                    dickson_metric_value(
+                        graph,
+                        "average_node_betweenness",
+                        self._dickson_metric_cache,
+                    ),
+                    5,
+                )
+            )
 
         # calculating eigenvector centrality
         if opt_gtc["display_eigenvector_centrality_histogram"]["value"] == 1:
@@ -540,7 +605,14 @@ class GraphAnalyzer(ProgressUpdate):
             if save_histogram:
                 self._histogram_data["closeness_distribution"] = close_distribution
             data_dict["parameter"].append("Average closeness centrality")
-            data_dict["value"].append(round(np.average(close_distribution), 5))
+            data_dict["value"].append(
+                round(
+                    dickson_metric_value(
+                        graph, "average_closeness", self._dickson_metric_cache
+                    ),
+                    5,
+                )
+            )
 
         # calculating Ohms centrality
         if opt_gtc["display_ohms_histogram"]["value"] == 1:
@@ -2385,6 +2457,25 @@ class GraphAnalyzer(ProgressUpdate):
         # 7. displaying run information
         fig = plot_run_configs()
         out_figs.append(fig)
+
+        if self._comparison_results is not None and not self._comparison_results.empty:
+            comparison_fig = plt.Figure(figsize=(11, 8.5), dpi=300)
+            comparison_ax = comparison_fig.add_subplot(1, 1, 1)
+            comparison_ax.set_axis_off()
+            comparison_ax.set_title("Dickson vs COMPASS metric comparison")
+            display_data = self._comparison_results.copy()
+            for column in display_data.columns[1:]:
+                display_data[column] = display_data[column].map(
+                    lambda value: "Undefined" if pd.isna(value) else f"{value:.5g}"
+                )
+            tbl.table(
+                comparison_ax,
+                cellText=display_data.values,
+                colLabels=display_data.columns,
+                loc="upper center",
+                cellLoc="left",
+            )
+            out_figs.append(comparison_fig)
         return out_figs
 
     @staticmethod
@@ -2425,6 +2516,11 @@ class GraphAnalyzer(ProgressUpdate):
                 csv_filename = filename + "_SGT_weighted.csv"
                 csv_file = os.path.join(output_location, csv_filename)
                 sgt_obj.weighted_results_df.to_csv(csv_file, index=False)
+
+            if sgt_obj.comparison_results is not None:
+                csv_filename = filename + "_SGT_compass_comparison.csv"
+                csv_file = os.path.join(output_location, csv_filename)
+                sgt_obj.comparison_results.to_csv(csv_file, index=False)
 
             if sgt_obj.scaling_results:
                 excel_filename = filename + "_SGT_scaling.xlsx"

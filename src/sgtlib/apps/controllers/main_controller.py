@@ -371,6 +371,7 @@ class MainController(BaseController):
             self.img_ctrl.imagePropsModel.reset_data([])
             self.graph_ctrl.graphPropsModel.reset_data([])
             self.graph_ctrl.graphComputeModel.reset_data([])
+            self.graph_ctrl.graphComparisonModel.reset_data([])
             self._selected_sgt_obj_index = 0
             self.load_image(reload_thumbnails=True)
             self.imageChangedSignal.emit()

@@ -22,6 +22,7 @@ class GraphController(QObject):
         # Create Models
         self.graphPropsModel = TableModel([])
         self.graphComputeModel = TableModel([])
+        self.graphComparisonModel = TableModel([])
         self.gtcScalingModel = CheckBoxModel([])
         self.gteTreeModel = TreeModel([])
         self.gtcListModel = CheckBoxModel([])
@@ -79,6 +80,12 @@ class GraphController(QObject):
 
             self.graphPropsModel.reset_data(graph_obj.props)
             self.graphComputeModel.reset_data(sgt_obj.props)
+            comparison_data = (
+                sgt_obj.comparison_results.values.tolist()
+                if sgt_obj.comparison_results is not None
+                else []
+            )
+            self.graphComparisonModel.reset_data(comparison_data)
         except Exception as err:
             logging.exception("Fatal Error: %s", err, extra={"user": "SGT Logs"})
             self._ctrl.showAlertSignal.emit(
