@@ -87,6 +87,11 @@ Item {
                         switch (model.id) {
                             case "display_ohms_histogram":
                                 return ohmsComponent
+                            case "compute_compass_boundary_betweenness":
+                            case "compute_compass_node_boundary_betweenness":
+                            case "compute_compass_random_betweenness":
+                            case "compute_compass_effective_resistance":
+                                return compassBoundaryComponent
                             case "compute_avg_node_connectivity":
                                 return avgComponent
                             case "compute_persistent_homology":
@@ -109,6 +114,11 @@ Item {
             MicroscopyPropertyWidget {
             }
         }
+    }
+
+    Component {
+        id: compassBoundaryComponent
+        CompassBoundaryWidget {}
     }
 
     // Custom component for 'compute_scaling_behavior'

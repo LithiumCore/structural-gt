@@ -97,20 +97,70 @@ _DICKSON_FUNCTIONS = {
 
 
 def _compass_functions():
+    """Return formulas matching the StructuralGT COMPASS API exactly."""
     return {
         "number_of_nodes": lambda g: g.vcount(),
         "number_of_edges": lambda g: g.ecount(),
-        "diameter": lambda g: g.diameter() if g.vcount() and g.is_connected() else math.nan,
+        "diameter": lambda g: g.diameter(),
+        "density": lambda g: g.density(),
+        "average_degree": lambda g: _mean(g.strength(weights=None)),
+        "average_clustering": lambda g: _mean(g.transitivity_local_undirected(mode="zero")),
+        "degree_assortativity": lambda g: _assortativity(g, compass=True),
+        "average_closeness": lambda g: _mean(g.closeness()),
+        "average_node_betweenness": lambda g: _mean(g.betweenness()),
+    }
+
+
+def _comparison_compass_functions():
+    """Return comparison-only COMPASS formulas.
+
+    These preserve the existing comparison table's normalization and
+    undefined-value policy. They are intentionally separate from the public
+    API, which mirrors StructuralGT's compute classes exactly.
+    """
+    return {
+        "number_of_nodes": lambda g: g.vcount(),
+        "number_of_edges": lambda g: g.ecount(),
+        "diameter": lambda g: (
+            g.diameter() if g.vcount() and g.is_connected() else math.nan
+        ),
         "density": lambda g: g.density(),
         "average_degree": lambda g: _mean(g.degree()),
-        "average_clustering": lambda g: _mean(g.transitivity_local_undirected(mode="zero")),
+        "average_clustering": lambda g: _mean(
+            g.transitivity_local_undirected(mode="zero")
+        ),
         "degree_assortativity": lambda g: _assortativity(g, compass=True),
         "average_closeness": lambda g: _mean(g.closeness()),
         "average_node_betweenness": lambda g: (
             _mean(g.betweenness()) / (g.vcount() * (g.vcount() - 1))
-            if g.vcount() > 1 else math.nan
+            if g.vcount() > 1
+            else math.nan
         ),
     }
+
+
+def compute_compass_metrics(
+    graph: ig.Graph,
+    selected_metrics: Iterable[str],
+) -> dict[str, float | int]:
+    """Calculate selected COMPASS metrics directly on an igraph graph.
+
+    This is the public entry point for using the COMPASS-side calculations
+    without running the Dickson comparison pipeline.  The supplied graph is
+    treated as read-only and is expected to have the vertex and edge
+    semantics produced by :class:`CompassGraphAdapter`.
+    """
+    if not isinstance(graph, ig.Graph):
+        raise TypeError("graph must be an igraph.Graph")
+
+    keys = list(dict.fromkeys(selected_metrics))
+    unknown = set(keys).difference(_METRIC_LABELS)
+    if unknown:
+        raise ValueError(f"Unsupported COMPASS metrics: {', '.join(sorted(unknown))}")
+    if not keys:
+        return {}
+
+    return _selected_values(graph, keys, _compass_functions())
 
 
 def _finite_or_nan(value):
@@ -143,7 +193,11 @@ def compute_metric_comparison(
         key: dickson_metric_value(graph, key, dickson_cache) for key in keys
     }
     compass_graph = CompassGraphAdapter.from_networkx(graph)
-    compass = _selected_values(compass_graph, keys, _compass_functions())
+    compass = _selected_values(
+        compass_graph,
+        keys,
+        _comparison_compass_functions(),
+    )
     rows = []
     for key in keys:
         left = _finite_or_nan(dickson[key])
@@ -167,6 +221,7 @@ def compute_metric_comparison(
 
 __all__ = [
     "COMPARISON_COLUMNS",
+    "compute_compass_metrics",
     "compute_metric_comparison",
     "dickson_metric_value",
 ]

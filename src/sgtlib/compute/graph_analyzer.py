@@ -43,6 +43,13 @@ from ..imaging.image_processor import ImageProcessor
 from ..networks.fiber_network import FiberNetworkBuilder
 from ..utils.config_loader import load_gtc_configs
 from .metric_comparison import compute_metric_comparison, dickson_metric_value
+from .compass_adapter import CompassGraphAdapter
+from .compass_metrics import (
+    compute_boundary_betweenness,
+    compute_effective_resistance,
+    compute_nematic_metrics,
+    compute_random_boundary_betweenness,
+)
 from ..utils.gen_plots import CurveFitModels
 from ..utils.sgt_utils import (
     AbortException,
@@ -247,6 +254,10 @@ class GraphAnalyzer(ProgressUpdate):
             graph_obj.nx_giant_graph
         )  # replace with graph_obj.nx_giant_graph
 
+        self._results_df = self._append_compass_metrics(
+            self._results_df, graph_obj.nx_giant_graph
+        )
+
         selected_comparisons = [
             option_id.removeprefix("compare_compass_")
             for option_id, option in self._configs.items()
@@ -300,6 +311,130 @@ class GraphAnalyzer(ProgressUpdate):
 
         # 6. Save GT compute metrics into props
         self.get_compute_props()
+
+    def _compass_boundary_vertices(self, graph: ig.Graph) -> tuple[list[int], list[int]]:
+        """Select source and target vertices from the GUI boundary ranges."""
+        if "o" not in graph.vs.attributes():
+            raise ValueError("COMPASS boundary metrics require vertex coordinates")
+
+        axis = int(self._configs["compass_boundary_axis"]["value"])
+        source_min = float(self._configs["compass_source_min"]["value"])
+        source_max = float(self._configs["compass_source_max"]["value"])
+        target_min = float(self._configs["compass_target_min"]["value"])
+        target_max = float(self._configs["compass_target_max"]["value"])
+        if source_min > source_max or target_min > target_max:
+            raise ValueError("COMPASS boundary minimum must not exceed maximum")
+
+        coordinates = np.asarray(graph.vs["o"], dtype=float)
+        if coordinates.ndim != 2 or axis >= coordinates.shape[1]:
+            raise ValueError("COMPASS boundary axis is outside the graph dimension")
+        source_values = coordinates[:, axis]
+        sources = np.flatnonzero(
+            (source_values >= source_min) & (source_values <= source_max)
+        ).tolist()
+        targets = np.flatnonzero(
+            (source_values >= target_min) & (source_values <= target_max)
+        ).tolist()
+        return sources, targets
+
+    @staticmethod
+    def _format_compass_value(value) -> str | float | int:
+        if isinstance(value, np.ndarray):
+            return np.array2string(value, precision=6, separator=", ")
+        if isinstance(value, (np.floating, float)):
+            return float(value)
+        if isinstance(value, (np.integer, int)):
+            return int(value)
+        return str(value)
+
+    def _append_compass_metrics(self, results, nx_graph):
+        """Run selected COMPASS-only metrics and append displayable rows."""
+        selected = any(
+            self._configs[key]["value"]
+            for key in (
+                "compute_compass_nematic",
+                "compute_compass_boundary_betweenness",
+                "compute_compass_node_boundary_betweenness",
+                "compute_compass_random_betweenness",
+                "compute_compass_effective_resistance",
+            )
+        )
+        if not selected:
+            return results
+
+        graph = CompassGraphAdapter.from_networkx(nx_graph)
+        rows = []
+        if self._configs["compute_compass_nematic"]["value"]:
+            nematic = compute_nematic_metrics(graph)
+            rows.extend(
+                [
+                    ["COMPASS Nematic order parameter", nematic["order"]],
+                    ["COMPASS Nematic tensor Q", self._format_compass_value(nematic["tensor"])],
+                    ["COMPASS Director", self._format_compass_value(nematic["director"])],
+                    ["COMPASS Edge orientations", self._format_compass_value(nematic["orientations"])],
+                ]
+            )
+            if nematic["angles"] is not None:
+                rows.extend(
+                    [
+                        ["COMPASS Edge angles", self._format_compass_value(nematic["angles"])],
+                        ["COMPASS Mean edge angle (degrees)", float(np.mean(nematic["angles"]))],
+                        ["COMPASS Median edge angle (degrees)", float(np.median(nematic["angles"]))],
+                    ]
+                )
+
+        if any(
+            self._configs[key]["value"]
+            for key in (
+                "compute_compass_boundary_betweenness",
+                "compute_compass_node_boundary_betweenness",
+                "compute_compass_random_betweenness",
+                "compute_compass_effective_resistance",
+            )
+        ):
+            sources, targets = self._compass_boundary_vertices(graph)
+            if self._configs["compute_compass_boundary_betweenness"]["value"] or self._configs[
+                "compute_compass_node_boundary_betweenness"
+            ]["value"]:
+                boundary = compute_boundary_betweenness(graph, sources, targets)
+                if self._configs["compute_compass_boundary_betweenness"]["value"]:
+                    rows.append(
+                        ["COMPASS Boundary edge betweenness", self._format_compass_value(boundary["edge_betweenness"])]
+                    )
+                if self._configs["compute_compass_node_boundary_betweenness"]["value"]:
+                    rows.append(
+                        ["COMPASS Node boundary betweenness", self._format_compass_value(boundary["node_betweenness"])]
+                    )
+            if self._configs["compute_compass_random_betweenness"]["value"]:
+                random_metrics = compute_random_boundary_betweenness(graph, sources, targets)
+                rows.extend(
+                    [
+                        ["COMPASS Linear random-walk betweenness", self._format_compass_value(random_metrics["linear_betweenness"])],
+                        ["COMPASS Nonlinear random-walk betweenness", self._format_compass_value(random_metrics["nonlinear_betweenness"])],
+                    ]
+                )
+            if self._configs["compute_compass_effective_resistance"]["value"]:
+                resistance = compute_effective_resistance(
+                    graph,
+                    sources,
+                    targets,
+                    r_j=float(self._configs["compass_r_j"]["value"]),
+                    conductance_attribute=(
+                        "target_weight"
+                        if "target_weight" in graph.es.attributes()
+                        else None
+                    ),
+                )
+                rows.extend(
+                    [
+                        ["COMPASS Effective resistance", resistance["effective_resistance"]],
+                        ["COMPASS Potentials P", self._format_compass_value(resistance["P"])],
+                        ["COMPASS Laplacian pseudoinverse Q", self._format_compass_value(resistance["Q"])],
+                    ]
+                )
+
+        additions = pd.DataFrame(rows, columns=["parameter", "value"])
+        return pd.concat([results, additions], ignore_index=True)
 
     def compute_gt_metrics(
         self,

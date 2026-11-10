@@ -1,11 +1,16 @@
 import math
 
+import igraph as ig
 import networkx as nx
 import pandas as pd
 import pytest
 import matplotlib.pyplot as plt
 
-from src.sgtlib.compute.metric_comparison import compute_metric_comparison
+from src.sgtlib.compute.metric_comparison import (
+    compute_compass_metrics,
+    compute_metric_comparison,
+)
+from src.sgtlib.compute import compute_compass_metrics as exported_compass_metrics
 from src.sgtlib.compute.graph_analyzer import GraphAnalyzer
 from src.sgtlib.utils.config_loader import load_gtc_configs
 
@@ -24,6 +29,28 @@ def test_comparison_keeps_full_precision_and_exposes_betweenness_difference():
     assert result.loc["Average Node Betweenness", "Dickson"] == pytest.approx(1 / 3)
     assert result.loc["Average Node Betweenness", "COMPASS"] == pytest.approx(1 / 12)
     assert result.loc["Average Node Betweenness", "Absolute Difference"] == pytest.approx(1 / 4)
+
+
+def test_public_compass_api_computes_selected_metrics_on_igraph_graph():
+    graph = ig.Graph(n=4, edges=[(0, 1), (1, 2), (2, 3)])
+
+    result = compute_compass_metrics(
+        graph,
+        ["number_of_nodes", "density", "average_node_betweenness"],
+    )
+
+    assert result["number_of_nodes"] == 4
+    assert result["density"] == pytest.approx(1 / 3)
+    # StructuralGT.NodeBetweenness returns raw igraph betweenness values;
+    # the COMPASS API's average is therefore 1 for a four-node path.
+    assert result["average_node_betweenness"] == pytest.approx(1)
+    assert exported_compass_metrics is compute_compass_metrics
+
+
+def test_public_compass_api_uses_igraph_diameter_for_disconnected_graphs():
+    result = compute_compass_metrics(ig.Graph(n=2), ["diameter"])
+
+    assert result["diameter"] == 0
 
 
 def test_disconnected_diameter_and_zero_baseline_relative_delta_are_undefined():

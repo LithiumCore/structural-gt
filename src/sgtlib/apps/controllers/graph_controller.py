@@ -41,6 +41,36 @@ class GraphController(QObject):
         self._ctrl.wait_msg = ""
         self._ctrl.wait_flag = False
 
+    @Slot(str, result=str)
+    def get_compass_parameter(self, parameter_id: str) -> str:
+        """Return a selected COMPASS GUI parameter as text."""
+        sgt_obj = self._ctrl.get_selected_sgt_obj()
+        if sgt_obj is None or parameter_id not in sgt_obj.configs:
+            return ""
+        return str(sgt_obj.configs[parameter_id].get("value", ""))
+
+    @Slot(str, str, result=bool)
+    def set_compass_parameter(self, parameter_id: str, value: str) -> bool:
+        """Validate and store a COMPASS GUI parameter."""
+        sgt_obj = self._ctrl.get_selected_sgt_obj()
+        if sgt_obj is None or parameter_id not in sgt_obj.configs:
+            return False
+        try:
+            parsed = int(value) if parameter_id == "compass_boundary_axis" else float(value)
+        except (TypeError, ValueError):
+            self._ctrl.showAlertSignal.emit(
+                "Invalid COMPASS parameter",
+                f"{sgt_obj.configs[parameter_id]['text']} must be numeric.",
+            )
+            return False
+        if parameter_id == "compass_boundary_axis" and parsed not in (0, 1, 2):
+            self._ctrl.showAlertSignal.emit(
+                "Invalid COMPASS parameter", "Boundary axis must be 0, 1, or 2."
+            )
+            return False
+        sgt_obj.configs[parameter_id]["value"] = parsed
+        return True
+
     def synchronize_graph_models(self, sgt_obj: GraphAnalyzer):
         """
             Reload graph configuration selections and controls from saved dict to QML gui_mcw.
