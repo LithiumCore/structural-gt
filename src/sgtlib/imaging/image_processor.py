@@ -202,6 +202,19 @@ class ImageProcessor(ProgressUpdate):
         ]
         return sel_images
 
+    def synchronize_binary_filter_configs(self) -> None:
+        """Copy the active binary-filter settings to every selected image."""
+        source_configs = self.image_obj.configs
+        binary_values = {
+            key: copy.deepcopy(option["value"])
+            for key, option in source_configs.items()
+            if option.get("type") == "binary-filter"
+        }
+        for image in self.selected_images:
+            for key, value in binary_values.items():
+                if key in image.configs:
+                    image.configs[key]["value"] = copy.deepcopy(value)
+
     @property
     def image_obj(self) -> BaseImage:
         """Returns the first image (2D) object/instance in the batch."""

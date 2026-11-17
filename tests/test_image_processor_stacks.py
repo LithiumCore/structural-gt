@@ -57,3 +57,20 @@ def test_from_image_file_rejects_slice_stack_with_mismatched_dimensions(tmp_path
         )
 
 
+def test_binary_filter_config_can_be_applied_to_all_selected_slices(tmp_path):
+    _write_slice(tmp_path, "slice0281.tif", 1)
+    _write_slice(tmp_path, "slice0282.tif", 2)
+
+    processor, _ = ImageProcessor.from_image_file(
+        str(tmp_path / "slice0281.tif"), allow_auto_scale=False
+    )
+    processor.image_obj.configs["global_threshold_value"]["value"] = 42
+
+    processor.synchronize_binary_filter_configs()
+
+    assert all(
+        image.configs["global_threshold_value"]["value"] == 42
+        for image in processor.selected_images
+    )
+
+

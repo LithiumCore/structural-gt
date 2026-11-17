@@ -301,6 +301,8 @@ class ImageController(QObject):
             sgt_obj = self._ctrl.get_selected_sgt_obj()
             if view != "":
                 sgt_obj.ntwk_p.selected_batch_view = view
+            if view == "binary" or sgt_obj.ntwk_p.selected_batch_view == "binary":
+                sgt_obj.ntwk_p.synchronize_binary_filter_configs()
             self._ctrl.changeImageSignal.emit()
 
     @Slot(bool, str, int)
