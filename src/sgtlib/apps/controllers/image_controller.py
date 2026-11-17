@@ -298,8 +298,8 @@ class ImageController(QObject):
         """Retrieve changes made by the user and apply to image/graph."""
         if not self._applying_changes:  # Disallow concurrent changes
             self._applying_changes = True
+            sgt_obj = self._ctrl.get_selected_sgt_obj()
             if view != "":
-                sgt_obj = self._ctrl.get_selected_sgt_obj()
                 sgt_obj.ntwk_p.selected_batch_view = view
             self._ctrl.changeImageSignal.emit()
 

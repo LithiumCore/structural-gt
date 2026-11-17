@@ -88,7 +88,7 @@ class GraphSkeleton:
         #       self._update_progress(ProgressData(percent=56, sender="GT", message=f"Removing bubbles from the skeleton..."))
         #   temp_skeleton = GraphSkeleton.remove_bubbles(temp_skeleton, img_bin_int, mask_elements)
 
-        if self._configs["merge_nearby_nodes"]["value"] == 1:
+        if self._configs["merge_nearby_nodes"]["value"] == 1 and self._is_2d:
             if self._update_progress is not None:
                 self._update_progress(
                     ProgressData(
@@ -101,6 +101,15 @@ class GraphSkeleton:
                 2  # int(self.configs["merge_nearby_nodes"]["items"][0]["value"])
             )
             temp_skeleton = GraphSkeleton.merge_nodes(temp_skeleton, node_radius_size)
+        elif self._configs["merge_nearby_nodes"]["value"] == 1 and not self._is_2d:
+            if self._update_progress is not None:
+                self._update_progress(
+                    ProgressData(
+                        type="warning",
+                        sender="GT",
+                        message="Skipping 2D node merging for 3D skeleton.",
+                    )
+                )
 
         if self._configs["remove_disconnected_segments"]["value"] == 1:
             if self._update_progress is not None:
@@ -118,7 +127,7 @@ class GraphSkeleton:
                 temp_skeleton, min_size=min_size, connectivity=2
             )
 
-        if self._configs["prune_dangling_edges"]["value"] == 1:
+        if self._configs["prune_dangling_edges"]["value"] == 1 and self._is_2d:
             if self._update_progress is not None:
                 self._update_progress(
                     ProgressData(
@@ -132,6 +141,15 @@ class GraphSkeleton:
             )
             b_points = GraphSkeleton.get_branched_points(temp_skeleton)
             temp_skeleton = GraphSkeleton.prune_edges(temp_skeleton, max_iter, b_points)
+        elif self._configs["prune_dangling_edges"]["value"] == 1 and not self._is_2d:
+            if self._update_progress is not None:
+                self._update_progress(
+                    ProgressData(
+                        type="warning",
+                        sender="GT",
+                        message="Skipping 2D dangling-edge pruning for 3D skeleton.",
+                    )
+                )
 
         self._skeleton = np.asarray(temp_skeleton, dtype=np.uint16)
         # self.skeleton = self.skeleton.astype(int)

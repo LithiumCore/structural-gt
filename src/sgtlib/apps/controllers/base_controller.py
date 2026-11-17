@@ -274,6 +274,10 @@ class BaseController(QObject):
             self.showAlertSignal.emit("Directory Error", result)
             return False
 
+        slice_stack_files = ImageProcessor.get_slice_stack_files(str(img_dir_path))
+        if slice_stack_files:
+            return self.create_sgt_object(slice_stack_files[0], out_dir)
+
         files = os.listdir(img_dir_path)
         files = sorted(files)
         for a_file in files:

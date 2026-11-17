@@ -1603,6 +1603,51 @@ class ImageProcessor(ProgressUpdate):
         return img_info_list
 
     @classmethod
+    def get_slice_stack_files(
+        cls, folder: str, selected_file: str | None = None
+    ) -> list[str]:
+        """Return lexicographically ordered image files belonging to a slice stack."""
+        folder_path = os.path.normpath(folder)
+        selected_name = os.path.basename(selected_file) if selected_file else None
+
+        if selected_name is None:
+            candidates = sorted(os.listdir(folder_path))
+            for candidate in candidates:
+                if re.match(r"^slice\d+\.(?:tif|tiff)$", candidate, re.IGNORECASE):
+                    selected_name = candidate
+                    break
+            if selected_name is None:
+                return []
+
+        img_ext = os.path.splitext(selected_name)[1]
+        img_name_pattern = re.match(
+            r"^([a-zA-Z_]+)(\d+)(?=\.[a-zA-Z]+$)", selected_name
+        )
+        is_prefix = True
+        if img_name_pattern is None:
+            is_prefix = False
+            img_name_pattern = re.match(
+                r"^\d+([a-zA-Z_]+)(?=\.[a-zA-Z]+$)", selected_name
+            )
+        if img_name_pattern is None:
+            return [os.path.join(folder_path, selected_name)]
+
+        prefix = img_name_pattern.group(1)
+        name_pattern = (
+            re.compile(rf"^{re.escape(prefix)}\d+{re.escape(img_ext)}$", re.IGNORECASE)
+            if is_prefix
+            else re.compile(
+                rf"^\d+{re.escape(prefix)}{re.escape(img_ext)}$", re.IGNORECASE
+            )
+        )
+
+        return [
+            os.path.join(folder_path, file_name)
+            for file_name in sorted(os.listdir(folder_path))
+            if name_pattern.match(file_name)
+        ]
+
+    @classmethod
     def from_image_file(
         cls,
         img_path: str,
@@ -1639,22 +1684,7 @@ class ImageProcessor(ProgressUpdate):
         """
 
         if img_name_pattern:
-            img_files.append(img_path)
-            f_name = img_name_pattern.group(1)
-            name_pattern = (
-                re.compile(rf"^{f_name}\d+{re.escape(img_file_ext)}$", re.IGNORECASE)
-                if is_prefix
-                else re.compile(
-                    rf"^\d+{f_name}{re.escape(img_file_ext)}$", re.IGNORECASE
-                )
-            )
-
-            # Check if 3D image slices exist in the image folder. Same file name but different number
-            files = sorted(os.listdir(img_dir))
-            for a_file in files:
-                if a_file.endswith(img_file_ext):
-                    if name_pattern.match(a_file):
-                        img_files.append(os.path.join(img_dir, a_file))
+            img_files = cls.get_slice_stack_files(img_dir, img_path)
 
         # Create the Output folder if it does not exist
         if out_folder != "":
@@ -1668,7 +1698,10 @@ class ImageProcessor(ProgressUpdate):
         # Create the StructuralGT object
         input_file = img_files if len(img_files) > 1 else str(img_path)
         imp_obj = cls(input_file, out_dir, config_file, auto_scale=allow_auto_scale)
-        imp_obj._initialize_image_batches(imp_obj._load_img_from_file(img_path))
+        img_batches = imp_obj._load_img_from_file(input_file)
+        if isinstance(input_file, list) and len(img_batches or []) != 1:
+            raise ValueError("All slices in a 3D image stack must have the same dimensions")
+        imp_obj._initialize_image_batches(img_batches)
         return imp_obj, img_file
 
     @classmethod
