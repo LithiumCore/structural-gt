@@ -22,7 +22,7 @@ from ..utils.sgt_utils import (
     ProgressUpdate,
     csv_to_graph,
     gsd_to_skeleton,
-    write_gsd_file,
+    write_gsd_graph_file,
 )
 from .sknw_mod import build_sknw  # , build_graph
 
@@ -593,18 +593,17 @@ class FiberNetworkBuilder(ProgressUpdate):
 
         if opt_gte["export_as_gexf"]["value"] == 1:
             # deleting extraneous info and then exporting the final skeleton
-            for x in nx_graph.nodes():
-                del nx_graph.nodes[x]["pts"]
-                del nx_graph.nodes[x]["o"]
-            for s, e in nx_graph.edges():
-                del nx_graph[s][e]["pts"]
-            nx.write_gexf(nx_graph, gexf_file)
+            gexf_graph = nx_graph.copy()
+            for x in gexf_graph.nodes():
+                del gexf_graph.nodes[x]["pts"]
+                del gexf_graph.nodes[x]["o"]
+            for s, e in gexf_graph.edges():
+                del gexf_graph[s][e]["pts"]
+            nx.write_gexf(gexf_graph, gexf_file)
 
         if opt_gte["export_as_gsd"]["value"] == 1:
             self._gsd_file = os.path.join(out_dir, gsd_filename)
-            if self._skel_obj is not None:
-                if self._skel_obj.skeleton_3d is not None:
-                    write_gsd_file(self._gsd_file, self._skel_obj.skeleton_3d)
+            write_gsd_graph_file(self._gsd_file, nx_graph)
 
     @staticmethod
     def get_weight_options() -> dict:

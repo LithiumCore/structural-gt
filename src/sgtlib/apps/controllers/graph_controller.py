@@ -18,6 +18,10 @@ class GraphController(QObject):
     def __init__(self, controller_obj, parent: QObject | None = None):
         super().__init__(parent)
         self._ctrl = controller_obj
+        self._ovito_dialog = None
+        self._ovito_pipeline = None
+        self._ovito_viewport_window = None
+        self._ovito_spacing_modifier = None
 
         # Create Models
         self.graphPropsModel = TableModel([])
@@ -171,7 +175,24 @@ class GraphController(QObject):
             from ovito import scene
             from ovito.gui import create_qwidget
             from ovito.io import import_file
+            from ovito.modifiers import (
+                AffineTransformationModifier,
+                AssignColorModifier,
+            )
             from ovito.vis import Viewport
+            from PySide6.QtCore import Qt
+            from PySide6.QtWidgets import (
+                QDialog,
+                QHBoxLayout,
+                QLabel,
+                QSlider,
+                QVBoxLayout,
+            )
+
+            # Close an earlier viewer before replacing its scene pipeline.
+            if self._ovito_dialog is not None:
+                self._ovito_dialog.close()
+                self._ovito_dialog = None
 
             # Clear any existing scene
             for p_line in list(scene.pipelines):
@@ -181,14 +202,76 @@ class GraphController(QObject):
             sgt_obj = self._ctrl.get_selected_sgt_obj()
             h, w = sgt_obj.ntwk_p.graph_obj.img_ntwk.shape[:2]
             pipeline = import_file(sgt_obj.ntwk_p.graph_obj.gsd_file)
+            spacing_modifier = AffineTransformationModifier(
+                relative_mode=True,
+                operate_on={"particles"},
+                transformation=[[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]],
+            )
+            pipeline.modifiers.append(spacing_modifier)
+            pipeline.modifiers.append(
+                AssignColorModifier(
+                    operate_on="particles", color=(0.12, 0.68, 0.9)
+                )
+            )
+            pipeline.modifiers.append(
+                AssignColorModifier(operate_on="bonds", color=(1, 1, 1))
+            )
             pipeline.add_to_scene()
 
             vp = Viewport(type=Viewport.Type.Perspective, camera_dir=(2, 1, -1))
             vp.zoom_all((w, h))  # width, height
 
-            ovito_widget = create_qwidget(vp, parent=self._ctrl.qml_app.activeWindow())
-            ovito_widget.setFixedSize(w, h)
-            ovito_widget.show()
+            dialog = QDialog(parent=self._ctrl.qml_app.activeWindow())
+            dialog.setWindowTitle("3D Graph Visualization")
+            dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+            dialog_layout = QVBoxLayout(dialog)
+
+            viewport_window = create_qwidget(vp, parent=dialog)
+            viewport_widget = getattr(viewport_window, "widget", viewport_window)
+            viewport_widget.setFixedSize(w, h)
+            dialog_layout.addWidget(viewport_widget)
+
+            spacing_controls = QHBoxLayout()
+            spacing_controls.addWidget(QLabel("Layer spacing"))
+            spacing_slider = QSlider(Qt.Orientation.Horizontal)
+            spacing_slider.setRange(25, 1500)
+            spacing_slider.setValue(100)
+            spacing_slider.setToolTip("Adjust the distance between all graph layers")
+            spacing_controls.addWidget(spacing_slider, 1)
+            spacing_label = QLabel("1.00×")
+            spacing_label.setMinimumWidth(52)
+            spacing_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+            spacing_controls.addWidget(spacing_label)
+            dialog_layout.addLayout(spacing_controls)
+
+            def update_layer_spacing(value: int) -> None:
+                multiplier = value / 100.0
+                spacing_modifier.transformation = [
+                    [multiplier, 0, 0, 0],
+                    [0, 1, 0, 0],
+                    [0, 0, 1, 0],
+                ]
+                spacing_label.setText(f"{multiplier:.2f}×")
+
+            spacing_slider.valueChanged.connect(update_layer_spacing)
+
+            self._ovito_dialog = dialog
+            self._ovito_pipeline = pipeline
+            self._ovito_viewport_window = viewport_window
+            self._ovito_spacing_modifier = spacing_modifier
+
+            def release_viewer(_result: int) -> None:
+                if pipeline in scene.pipelines:
+                    pipeline.remove_from_scene()
+                if self._ovito_pipeline is pipeline:
+                    self._ovito_dialog = None
+                    self._ovito_pipeline = None
+                    self._ovito_viewport_window = None
+                    self._ovito_spacing_modifier = None
+
+            dialog.finished.connect(release_viewer)
+            dialog.resize(w, h + spacing_slider.sizeHint().height() + 24)
+            dialog.show()
         except Exception as e:
             logging.exception(
                 f"Graph Simulation Error: {e}", extra={"user": "SGT Logs"}

@@ -317,6 +317,44 @@ def write_gsd_file(f_name: str | None, skeleton: np.ndarray | None) -> None:
         f.append(s)
 
 
+def write_gsd_graph_file(f_name: str | None, graph: nx.Graph | None) -> None:
+    """Write graph vertices and bonds for connected OVITO visualization."""
+    if f_name is None or graph is None or graph.number_of_nodes() == 0:
+        return
+
+    nodes = list(graph.nodes())
+    node_index = {node: index for index, node in enumerate(nodes)}
+    positions = np.asarray([graph.nodes[node]["o"] for node in nodes], dtype=float)
+    if positions.ndim != 2 or positions.shape[1] not in (2, 3):
+        raise ValueError("Graph node positions must have two or three coordinates")
+    if positions.shape[1] == 2:
+        positions = np.column_stack((np.zeros(len(positions)), positions))
+
+    # GSD stores HOOMD coordinates in a centered simulation box.
+    lower = positions.min(axis=0)
+    upper = positions.max(axis=0)
+    lengths = np.maximum(upper - lower + 2.0, 1.0)
+    positions = positions - (lower + upper) / 2.0
+    bonds = np.asarray(
+        [(node_index[start], node_index[end]) for start, end in graph.edges()],
+        dtype=np.uint32,
+    ).reshape((-1, 2))
+
+    frame = gsd.hoomd.Frame()
+    frame.particles.N = len(positions)
+    frame.particles.position = positions
+    frame.particles.types = ["A"]
+    frame.particles.typeid = np.zeros(len(positions), dtype=np.uint32)
+    frame.configuration.box = [*lengths, 0, 0, 0]
+    frame.bonds.N = len(bonds)
+    frame.bonds.group = bonds
+    frame.bonds.types = ["A-A"]
+    frame.bonds.typeid = np.zeros(len(bonds), dtype=np.uint32)
+
+    with gsd.hoomd.open(name=f_name, mode="w") as output:
+        output.append(frame)
+
+
 def gsd_to_skeleton(gsd_file: str, is_2d: bool = False) -> None | np.ndarray:
     """
     A function that takes a gsd file and returns a NetworkX graph object.
